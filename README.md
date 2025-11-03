@@ -1,6 +1,9 @@
 # Fubon MCP Server
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
+[![PyPI version](https://img.shields.io/pypi/v/fubon-api-mcp-server.svg)](https://pypi.org/project/fubon-api-mcp-server/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/fubon-api-mcp-server.svg)](https://pypi.org/project/fubon-api-mcp-server/)
+[![codecov](https://codecov.io/gh/Mofesto/fubon-api-mcp-server/branch/main/graph/badge.svg)](https://codecov.io/gh/Mofesto/fubon-api-mcp-server)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 富邦證券市場資料 MCP (Model Communication Protocol) 伺服器，提供完整的台股交易功能與市場數據查詢。
@@ -35,7 +38,33 @@
 - ✅ **錯誤處理**：完善的異常處理機制
 - ✅ **參數驗證**：輸入驗證與錯誤訊息
 
-## 📋 系統需求
+## � 與富邦證券官方 API 的關係
+
+本專案是基於 [**富邦證券官方 Trade API**](https://www.fbs.com.tw/TradeAPI/docs/welcome/) 開發的 MCP (Model Context Protocol) 服務器包裝器：
+
+### 📚 官方 API 說明
+- **官方文檔**: https://www.fbs.com.tw/TradeAPI/docs/welcome/
+- **核心依賴**: `fubon_neo` Python SDK（由富邦證券官方提供）
+- **支援功能**: 完整的台股交易、行情數據、帳戶管理功能
+
+### 🔄 功能對應
+| MCP 服務器功能 | 官方 API 對應 |
+|---------------|---------------|
+| 買賣下單 | `fubon_neo.api.place_order()` |
+| 委託管理 | `fubon_neo.api.modify_order()` / `cancel_order()` |
+| 市場數據 | `fubon_neo.api.get_snapshot()` / `get_candles()` |
+| 帳戶資訊 | `fubon_neo.api.get_account_balance()` / `get_inventory()` |
+| 主動回報 | `fubon_neo.api.get_order_reports()` / WebSocket |
+
+### 🎯 專案定位
+- **非官方產品**: 本專案為社群開發的 MCP 整合方案
+- **API 橋接**: 將富邦官方 API 封裝為 MCP 協議介面
+- **相容性**: 完全相容官方 API 的所有功能和參數
+- **增強功能**: 新增批量處理、快取優化、非阻塞操作等
+
+**重要提醒**: 使用本專案前，請先參考[官方 API 文檔](https://www.fbs.com.tw/TradeAPI/docs/welcome/)了解詳細的 API 使用規範和限制。
+
+## �📋 系統需求
 
 - **Python**: 3.8 或以上版本
 - **作業系統**: macOS / Linux / Windows
@@ -61,7 +90,23 @@ source .venv/bin/activate
 
 ### 2. 安裝依賴
 
+#### 方式一：使用 pip 安裝（推薦）
+
 ```bash
+# 安裝本專案
+pip install fubon-api-mcp-server
+
+# 安裝富邦官方 SDK
+pip install fubon-neo
+```
+
+#### 方式二：從原始碼安裝
+
+```bash
+# 克隆專案
+git clone https://github.com/mofesto/fubon-api-mcp-server.git
+cd fubon-api-mcp-server
+
 # 安裝Python套件
 pip install -r requirements.txt
 
@@ -69,7 +114,10 @@ pip install -r requirements.txt
 python install_fubon_neo.py
 ```
 
-**注意**: `fubon_neo` 套件需要從富邦官方網站下載 `.whl` 文件。
+**注意**: 
+- `fubon-neo` 套件需要從富邦官方網站下載 `.whl` 文件
+- 或者直接使用 `pip install fubon-neo`（如果已上傳到 PyPI）
+- 本專案的 MCP 服務器功能依賴 `fubon-neo` 作為底層 API 橋接
 
 ### 3. 環境配置
 
@@ -297,7 +345,12 @@ all_reports = get_all_reports({"limit": 5})
 
 ## 🧪 測試與驗證
 
-### 運行完整測試套件
+#### 測試覆蓋率
+[![codecov](https://codecov.io/gh/Mofesto/fubon-api-mcp-server/branch/main/graph/badge.svg)](https://codecov.io/gh/Mofesto/fubon-api-mcp-server)
+
+**當前覆蓋率**: 28% (目標: >80%)
+
+#### 運行完整測試套件
 
 ```bash
 # API 功能測試 (17項測試)
@@ -313,7 +366,20 @@ python test_account_balance.py
 python test_snapshot_actives.py
 ```
 
-### 測試結果
+#### 生成覆蓋率報告
+
+```bash
+# 安裝測試依賴
+pip install pytest-cov coverage
+
+# 運行測試並生成覆蓋率
+pytest --cov=fubon_mcp --cov-report=html --cov-report=term-missing
+
+# 查看 HTML 報告
+open htmlcov/index.html
+```
+
+#### 測試結果
 
 - ✅ **API 連線**: 100% 成功
 - ✅ **交易功能**: 完整支持買賣下單、委託管理
@@ -360,6 +426,14 @@ fubon-api-mcp-server/
 | `FUBON_PFX_PATH` | ✅ | 電子憑證路徑 (.pfx) |
 | `FUBON_PFX_PASSWORD` | ❌ | 憑證密碼（如果有） |
 | `FUBON_DATA_DIR` | ❌ | 數據快取目錄（預設: ./data） |
+
+### 核心依賴說明
+
+- **`fubon-neo`**: 富邦證券官方 Python SDK，提供完整的交易 API
+- **`mcp`**: Model Context Protocol 服務器框架
+- **`pandas`**: 數據處理和分析
+- **`pydantic`**: 數據驗證和序列化
+- **`python-dotenv`**: 環境變數管理
 
 ### 安全注意事項
 
@@ -419,6 +493,9 @@ fubon-api-mcp-server/
 # 安裝開發依賴
 pip install -r requirements-dev.txt
 
+# 安裝富邦官方 SDK（開發測試用）
+pip install fubon-neo
+
 # 運行測試
 python -m pytest
 
@@ -426,6 +503,11 @@ python -m pytest
 black .
 flake8 .
 ```
+
+**開發者注意**: 
+- 開發時請確保已安裝 `fubon-neo` 套件
+- 測試需要有效的富邦證券帳號和憑證
+- 請勿在生產環境中提交敏感憑證資訊
 
 ## 📄 授權條款
 

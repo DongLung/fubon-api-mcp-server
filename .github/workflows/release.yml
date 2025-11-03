@@ -31,13 +31,14 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build twine
+        pip install build twine setuptools-scm
 
     - name: Get version from tag
       if: github.event_name == 'release'
       run: |
         VERSION=${GITHUB_REF#refs/tags/v}
         echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "TAG_VERSION=v$VERSION" >> $GITHUB_ENV
 
     - name: Bump version and create tag
       if: github.event_name == 'workflow_dispatch'
@@ -45,28 +46,30 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
 
+        # Get current version from setuptools-scm
+        CURRENT_VERSION=$(python -c "import setuptools_scm; print(setuptools_scm.get_version())")
+        echo "Current version: $CURRENT_VERSION"
+
         # Bump version based on input
         if [ "${{ github.event.inputs.version }}" = "major" ]; then
-          python -m pip install bump2version
-          bump2version major
+          # Extract major.minor.patch from current version
+          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+          NEW_VERSION="$((major + 1)).0.0"
         elif [ "${{ github.event.inputs.version }}" = "minor" ]; then
-          python -m pip install bump2version
-          bump2version minor
+          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+          NEW_VERSION="$major.$((minor + 1)).0"
         else
-          python -m pip install bump2version
-          bump2version patch
+          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+          NEW_VERSION="$major.$minor.$((patch + 1))"
         fi
 
-        # Get new version
-        VERSION=$(python -c "import fubon_mcp; print(fubon_mcp.__version__)")
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "New version: $NEW_VERSION"
+        echo "VERSION=$NEW_VERSION" >> $GITHUB_ENV
+        echo "TAG_VERSION=v$NEW_VERSION" >> $GITHUB_ENV
 
-        # Commit and tag
-        git add .
-        git commit -m "chore: bump version to $VERSION"
-        git tag "v$VERSION"
-        git push origin main
-        git push origin "v$VERSION"
+        # Create and push tag
+        git tag "$TAG_VERSION"
+        git push origin "$TAG_VERSION"
 
     - name: Build package
       run: |

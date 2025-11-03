@@ -56,15 +56,22 @@ jobs:
 
     - name: Run tests
       run: |
-        pytest --cov=fubon_mcp --cov-report=xml --cov-report=term-missing
+        pytest --cov=fubon_mcp --cov-report=xml --cov-report=term-missing --cov-report=html --cov-fail-under=25
 
-    - name: Upload coverage to Codecov
+    - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v3
       with:
         file: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+
+    - name: Upload coverage HTML report
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-html-report
+        path: htmlcov/
+        retention-days: 7
 
   security:
     runs-on: ubuntu-latest

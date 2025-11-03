@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "fubon-api-mcp-server"
-version = "1.6.0"
-description = "富邦證券 MCP 服務器 - Model Context Protocol 服務器用於富邦證券 API"
+dynamic = ["version"]
+description = "富邦證券 MCP 服務器 - Model Context Protocol 服務器用於富邦證券 API，提供完整的台股交易功能與市場數據查詢"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
@@ -77,17 +77,18 @@ Documentation = "https://fubon-api-mcp-server.readthedocs.io/"
 Repository = "https://github.com/mofesto/fubon-api-mcp-server"
 Issues = "https://github.com/mofesto/fubon-api-mcp-server/issues"
 Changelog = "https://github.com/mofesto/fubon-api-mcp-server/blob/main/CHANGELOG.md"
+PyPI = "https://pypi.org/project/fubon-api-mcp-server/"
+Source = "https://github.com/mofesto/fubon-api-mcp-server"
+Tracker = "https://github.com/mofesto/fubon-api-mcp-server/issues"
 
 [project.scripts]
 fubon-api-mcp-server = "fubon_mcp.server:main"
 
-[tool.setuptools]
-zip-safe = false
-include-package-data = true
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["fubon_mcp*"]
+[tool.setuptools_scm]
+write_to = "fubon_mcp/_version.py"
+version_scheme = "post-release"
+local_scheme = "node-and-date"
+fallback_version = "1.6.0"
 
 [tool.setuptools.package-data]
 fubon_mcp = ["*.txt", "*.md"]
@@ -175,6 +176,7 @@ omit = [
     "*/tests/*",
     "*/test_*.py",
     "setup.py",
+    "fubon_mcp/_version.py",
 ]
 
 [tool.coverage.report]
@@ -190,33 +192,16 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
+show_missing = true
+skip_covered = false
+skip_empty = false
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
 
 [tool.bandit]
 exclude_dirs = ["tests", "examples"]
 skips = ["B101", "B601"]  # Skip assert checks and shell usage
-
-[tool.bumpversion]
-current_version = "1.6.0"
-parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
-serialize = ["{major}.{minor}.{patch}"]
-search = "{current_version}"
-replace = "{new_version}"
-regex = false
-ignore_missing_version = false
-tag = true
-sign_tags = false
-tag_name = "v{new_version}"
-tag_message = "chore: bump version to {new_version}"
-allow_dirty = false
-commit = true
-message = "chore: bump version to {new_version}"
-commit_args = ""
-
-[[tool.bumpversion.files]]
-filename = "pyproject.toml"
-
-[[tool.bumpversion.files]]
-filename = "fubon_mcp/__init__.py"
-
-[[tool.bumpversion.files]]
-filename = "fubon_mcp/server.py"

@@ -25,11 +25,18 @@
 - FUBON_PFX_PASSWORD: PFX 憑證密碼（可選）
 - FUBON_DATA_DIR: 本地數據儲存目錄（可選）
 
-版本: 1.6.0
 作者: Fubon MCP Team
 """
 
-__version__ = "1.6.0"
+try:
+    from ._version import version as __version__
+except ImportError:
+    try:
+        from setuptools_scm import get_version
+        __version__ = get_version()
+    except ImportError:
+        __version__ = "unknown"
+
 __author__ = "Fubon MCP Team"
 
 # 匯入主要組件
