@@ -4,6 +4,7 @@ import os
 
 import pytest
 from dotenv import load_dotenv
+from fubon_neo.sdk import FubonSDK
 
 # 加載環境變量
 load_dotenv()
@@ -16,9 +17,11 @@ pfx_password = os.getenv("FUBON_PFX_PASSWORD")
 
 # 如果缺少必要的環境變數，跳過整個模塊
 if not all([username, password, pfx_path]):
-    pytest.skip("FUBON_USERNAME, FUBON_PASSWORD, and FUBON_PFX_PATH environment variables are required", allow_module_level=True)
+    pytest.skip(
+        "FUBON_USERNAME, FUBON_PASSWORD, and FUBON_PFX_PATH environment variables are required",
+        allow_module_level=True,
+    )
 
-from fubon_neo.sdk import FubonSDK
 
 # 初始化SDK
 sdk = FubonSDK()
