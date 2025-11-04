@@ -19,7 +19,7 @@ lib64/
 parts/
 sdist/
 var/
-wheels/
+# wheels/ - commented out to include wheels directory for private packages
 pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
