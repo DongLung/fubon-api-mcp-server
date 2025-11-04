@@ -64,8 +64,8 @@ def calculate_rsi(data: pd.DataFrame, period: int = 14, column: str = "close") -
         pd.Series: RSI values (0-100)
     """
     delta = data[column].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()  # type: ignore[operator]
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()  # type: ignore[operator]
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
     rs = gain / loss
     rsi: pd.Series = 100 - (100 / (1 + rs))
     return rsi
