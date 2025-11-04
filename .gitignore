@@ -155,3 +155,8 @@ data/
 # Local development scripts
 publish_to_github.sh
 publish_to_github.ps1
+
+# VS Code Extension
+vscode-extension/node_modules/
+vscode-extension/*.vsix
+vscode-extension/package-lock.json

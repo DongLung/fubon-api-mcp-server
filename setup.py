@@ -18,7 +18,13 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 setup(
     # 包基本資訊
     name="fubon-api-mcp-server",
-    version="1.7.0",  # 與 __init__.py 中的版本保持一致
+    use_scm_version={
+        "write_to": "fubon_mcp/_version.py",
+        "version_scheme": "post-release",
+        "local_scheme": "node-and-date",
+        "fallback_version": "1.8.0",
+    },
+    setup_requires=["setuptools-scm"],
     author="Jimmy Cui",
     author_email="",
     description="富邦證券 MCP 服務器 - Model Context Protocol 服務器用於富邦證券 API",
@@ -40,7 +46,6 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
-        "Programming Language :: Python :: 3.14",
         "Topic :: Office/Business :: Financial :: Investment",  # 主題：金融投資
     ],
     # Python 版本需求

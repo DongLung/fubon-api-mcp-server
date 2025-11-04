@@ -35,7 +35,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
     "Topic :: Office/Business :: Financial :: Investment",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
@@ -87,14 +86,14 @@ fubon-api-mcp-server = "fubon_mcp.server:main"
 write_to = "fubon_mcp/_version.py"
 version_scheme = "post-release"
 local_scheme = "node-and-date"
-fallback_version = "1.7.0"
+fallback_version = "1.8.0"
 
 [tool.setuptools.package-data]
 fubon_mcp = ["*.txt", "*.md"]
 
 [tool.black]
 line-length = 127
-target-version = ['py310', 'py311', 'py312', 'py313', 'py314']
+target-version = ['py310', 'py311', 'py312', 'py313']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
