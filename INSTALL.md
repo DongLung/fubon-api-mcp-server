@@ -49,22 +49,34 @@ pip install -e .
 
 ```
 wheels/
-└── fubon_neo-2.2.5-cp37-abi3-win_amd64.whl
+├── fubon_neo-2.2.5-cp37-abi3-win_amd64.whl              # Windows
+├── fubon_neo-2.2.5-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl  # Linux
+├── fubon_neo-2.2.5-cp37-abi3-macosx_11_0_arm64.whl      # macOS ARM64 (M1/M2/M3/M4)
+└── fubon_neo-2.2.5-cp37-abi3-macosx_10_12_x86_64.whl    # macOS Intel
 ```
 
 ### 支援的平台
 
-- **Python**: 3.7+ (abi3 兼容)
-- **作業系統**: Windows AMD64
-- **版本**: 2.2.5
+| 平台 | 架構 | Python 版本 | 狀態 |
+|------|------|-------------|------|
+| **Windows** | AMD64 | 3.7+ | ✅ 完整支援 |
+| **Linux** | x86_64 | 3.7+ | ✅ 完整支援 |
+| **macOS** | ARM64 (Apple Silicon) | 3.7+ | ✅ 完整支援 |
+| **macOS** | Intel (x86_64) | 3.7+ | ✅ 完整支援 |
 
-### Linux/macOS 使用者
+### 自動平台選擇
 
-如果你在 Linux 或 macOS 上使用，需要從富邦證券官方下載對應平台的 wheel：
+使用 `requirements.txt` 安裝時會自動選擇正確的 wheel：
 
-1. 訪問富邦證券 Trade API: https://www.fbs.com.tw/TradeAPI/docs/
-2. 下載對應平台的 `fubon_neo` wheel
-3. 安裝: `pip install /path/to/fubon_neo-xxx.whl`
+```bash
+pip install -r requirements.txt
+```
+
+pip 會根據你的作業系統自動選擇：
+- Windows: `fubon_neo-2.2.5-cp37-abi3-win_amd64.whl`
+- Linux: `fubon_neo-2.2.5-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl`
+- macOS ARM64 (M1/M2/M3/M4): `fubon_neo-2.2.5-cp37-abi3-macosx_11_0_arm64.whl`
+- macOS Intel: `fubon_neo-2.2.5-cp37-abi3-macosx_10_12_x86_64.whl`
 
 ## 開發者安裝
 
@@ -93,24 +105,48 @@ pip install -e ".[docs]"
 
 **解決方案 1**: 確認使用本地 wheel
 ```bash
+# 自動選擇 (推薦)
+pip install -r requirements.txt
+
+# 或手動指定:
+# Windows
 pip install ./wheels/fubon_neo-2.2.5-cp37-abi3-win_amd64.whl
+
+# Linux
+pip install ./wheels/fubon_neo-2.2.5-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+
+# macOS ARM64 (M1/M2/M3/M4)
+pip install ./wheels/fubon_neo-2.2.5-cp37-abi3-macosx_11_0_arm64.whl
+
+# macOS Intel
+pip install ./wheels/fubon_neo-2.2.5-cp37-abi3-macosx_10_12_x86_64.whl
 ```
 
 **解決方案 2**: 檢查平台相容性
 ```bash
 # 檢查當前平台
-python -c "import platform; print(platform.platform())"
+python -c "import sys, platform; print(f'OS: {sys.platform}, Arch: {platform.machine()}')"
 
-# 如果不是 Windows，需要下載對應平台的 wheel
+# Windows: 應顯示 OS: win32, Arch: AMD64
+# Linux: 應顯示 OS: linux, Arch: x86_64
+# macOS ARM64: 應顯示 OS: darwin, Arch: arm64
+# macOS Intel: 應顯示 OS: darwin, Arch: x86_64
 ```
 
 ### 問題: Wheel 不相容
 
-如果遇到 wheel 不相容錯誤：
+所有主流平台的 wheel 都已包含在專案中。如果仍遇到問題：
 
 ```bash
-# 強制安裝 (謹慎使用)
-pip install --force-reinstall ./wheels/fubon_neo-2.2.5-cp37-abi3-win_amd64.whl
+# 1. 確認您的平台
+python -c "import sys, platform; print(f'Platform: {sys.platform}, Machine: {platform.machine()}')"
+
+# 2. 確認 wheels 目錄完整
+ls wheels/  # macOS/Linux
+dir wheels\  # Windows
+
+# 3. 嘗試重新安裝
+pip install --force-reinstall -r requirements.txt
 ```
 
 ### 問題: CI/CD 失敗
