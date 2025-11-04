@@ -160,3 +160,6 @@ publish_to_github.ps1
 vscode-extension/node_modules/
 vscode-extension/*.vsix
 vscode-extension/package-lock.json
+
+# setuptools-scm version file (auto-generated)
+fubon_mcp/_version.py

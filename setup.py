@@ -11,9 +11,18 @@ from setuptools import find_packages, setup
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-# 讀取依賴列表
+# 讀取依賴列表（過濾掉平台特定的依賴）
 with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+    requirements = []
+    for line in fh:
+        line = line.strip()
+        # 跳過空行和註釋
+        if not line or line.startswith("#"):
+            continue
+        # 跳過包含環境標記的行（平台特定的依賴）
+        if ";" in line:
+            continue
+        requirements.append(line)
 
 setup(
     # 包基本資訊
