@@ -45,38 +45,13 @@ except ImportError:
 
 __author__ = "Jimmy Cui"
 
-# 匯入主要組件
-from .server import (  # Callable wrapper functions for testing
-    callable_batch_place_order,
-    callable_cancel_order,
-    callable_get_account_info,
-    callable_get_all_reports,
-    callable_get_bank_balance,
-    callable_get_event_reports,
-    callable_get_filled_reports,
-    callable_get_historical_stats,
-    callable_get_intraday_candles,
-    callable_get_intraday_quote,
-    callable_get_intraday_ticker,
-    callable_get_intraday_tickers,
-    callable_get_intraday_trades,
-    callable_get_intraday_volumes,
-    callable_get_inventory,
-    callable_get_order_changed_reports,
-    callable_get_order_reports,
-    callable_get_order_results,
-    callable_get_realtime_quotes,
-    callable_get_settlement_info,
-    callable_get_snapshot_actives,
-    callable_get_snapshot_movers,
-    callable_get_snapshot_quotes,
-    callable_get_unrealized_pnl,
-    callable_modify_price,
-    callable_modify_quantity,
-    callable_place_order,
-    main,
-    mcp,
-)
+# 延遲載入以避免循環導入和 runpy 警告
+def __getattr__(name: str) -> "Any":
+    """延遲載入模組屬性以避免 python -m 執行時的警告"""
+    if name in __all__:
+        from . import server
+        return getattr(server, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # 定義包的公開介面
 __all__ = [
