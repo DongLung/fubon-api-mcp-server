@@ -185,7 +185,7 @@ def analyze_trend(data: pd.DataFrame, short_period: int = 20, long_period: int =
     latest_short = short_ma.iloc[-1] if not short_ma.empty else None
     latest_long = long_ma.iloc[-1] if not long_ma.empty else None
 
-    if pd.notna(latest_short) and pd.notna(latest_long):
+    if pd.notna(latest_short) and pd.notna(latest_long) and latest_short is not None and latest_long is not None:
         if latest_short > latest_long:
             trend = "bullish"
             strength = (latest_short - latest_long) / latest_long * 100
@@ -232,7 +232,7 @@ def analyze_momentum(data: pd.DataFrame) -> Dict:
         rsi_signal = "insufficient_data"
 
     # MACD analysis
-    if pd.notna(latest_macd) and pd.notna(latest_signal):
+    if pd.notna(latest_macd) and pd.notna(latest_signal) and latest_macd is not None and latest_signal is not None:
         if latest_macd > latest_signal:
             macd_signal = "bullish"
         else:

@@ -153,8 +153,22 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = [
     "mcp.*",
+    "fastmcp.*",
+    "pandas.*",
 ]
+ignore_missing_imports = true
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "fubon_mcp.indicators_service",
+    "fubon_mcp.market_data_service",
+    "fubon_mcp.historical_data_service",
+    "fubon_mcp.trading_service",
+    "fubon_mcp.reports_service",
+    "fubon_mcp.account_service",
+]
+disallow_untyped_decorators = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
