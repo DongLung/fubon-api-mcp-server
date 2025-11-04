@@ -8,6 +8,8 @@
 - ✅ 支援開發版本自動標記 (e.g., 1.8.1.dev0+g668432028.d20251104)
 
 #### VS Code Extension
+- ✅ **Extension ID**: `mofesto.fubon-api-mcp-server`
+- ✅ **Publisher**: mofesto
 - ✅ 完整的 VS Code Extension 結構
 - ✅ 一鍵啟動/停止 MCP Server
 - ✅ 內建配置管理 (帳號、憑證、數據目錄)
@@ -40,10 +42,10 @@
 ### 📦 VS Code Extension 功能
 
 **Commands:**
-- `Fubon MCP: Start` - 啟動 MCP Server
-- `Fubon MCP: Stop` - 停止 MCP Server
-- `Fubon MCP: Restart` - 重啟 MCP Server
-- `Fubon MCP: Show Logs` - 顯示日誌
+- `Fubon MCP: Start Fubon MCP Server` - 啟動 MCP Server
+- `Fubon MCP: Stop Fubon MCP Server` - 停止 MCP Server
+- `Fubon MCP: Restart Fubon MCP Server` - 重啟 MCP Server
+- `Fubon MCP: Show Fubon MCP Server Logs` - 顯示日誌
 
 **Settings:**
 - `fubon-mcp.username` - 富邦證券帳號
@@ -75,10 +77,13 @@ pip install fubon-api-mcp-server==1.8.0
 ```
 
 **VS Code Extension:**
-1. 從 Marketplace 搜尋 "Fubon API MCP Server"
-2. 或從 Assets 下載 .vsix 檔案手動安裝
+1. **Extension ID**: `mofesto.fubon-api-mcp-server`
+2. 從 Marketplace 搜尋 "Fubon API MCP Server" (Publisher: **mofesto**)
+3. 或訪問: https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server
+4. 或從 GitHub Releases 下載 .vsix 檔案手動安裝
 
 ### 🔗 相關連結
+- **VS Code Extension**: https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server
 
 - **PyPI**: https://pypi.org/project/fubon-api-mcp-server/
 - **文檔**: https://github.com/Mofesto/fubon-api-mcp-server#readme

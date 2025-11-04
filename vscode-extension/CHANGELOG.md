@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.4] - 2025-11-04
+
+### Added
+- 🚀 **VS Code Extension**: 完整的 VS Code Extension 功能
+	- Extension ID: `mofesto.fubon-api-mcp-server`
+	- Publisher: mofesto
+	- Marketplace 發佈
+- 🎯 **一鍵操作**: 啟動、停止、重啟 MCP Server
+- 🔧 **配置管理**: 內建設定管理（帳號、憑證、數據目錄）
+- 🔒 **安全輸入**: 密碼安全輸入，不儲存在設定檔中
+- 📊 **即時日誌**: 輸出面板顯示 server 日誌
+- ⚙️ **命令面板**: 支援所有操作指令
+- 🔧 **動態版本**: setuptools-scm 自動版本管理
+- 📦 **自動發佈**: GitHub Actions 自動發佈到 Marketplace
+
+### Features
+- Command: `Fubon MCP: Start Fubon MCP Server`
+- Command: `Fubon MCP: Stop Fubon MCP Server`
+- Command: `Fubon MCP: Restart Fubon MCP Server`
+- Command: `Fubon MCP: Show Fubon MCP Server Logs`
+- Configuration: Username, PFX Path, Data Dir, Auto Start
+
+### Changed
+- 版本管理改為從 Git tags 動態生成
+- 改善發佈流程和自動化
+
+### Security
+- 密碼採用安全輸入方式
+- 敏感資訊不儲存在配置中
+
+
 ## [1.7.0] - 2025-11-03
 
 ### Added

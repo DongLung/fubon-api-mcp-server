@@ -126,8 +126,10 @@ twine upload dist/*
 ## 🎯 專案資訊
 
 - **專案名稱**: 富邦證券 MCP 伺服器
-- **版本**: 1.7.0
+- **版本**: 1.8.4
 - **描述**: 提供完整的台股交易功能與市場數據查詢
+- **PyPI Package**: fubon-api-mcp-server
+- **VS Code Extension ID**: mofesto.fubon-api-mcp-server
 - **授權**: MIT License
 
 ## 📞 支援

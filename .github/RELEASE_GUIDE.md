@@ -54,9 +54,10 @@ git push origin v1.8.0
 ## What's Changed in v1.8.0
 
 ### 🚀 新功能 (Features)
+- 完整的 VS Code Extension (Extension ID: mofesto.fubon-api-mcp-server)
 - 新增動態版本管理 (setuptools-scm)
 - 完整的 MCP server 功能驗證
-- VS Code Extension 整合準備
+- 自動化發佈流程 (PyPI + Marketplace)
 
 ### 🐛 修正 (Bug Fixes)
 - 修正版本號管理問題

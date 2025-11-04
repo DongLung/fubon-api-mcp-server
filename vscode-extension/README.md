@@ -1,6 +1,14 @@
 # Fubon API MCP Server - VS Code Extension
 
+[![VS Code Extension](https://img.shields.io/visual-studio-marketplace/v/mofesto.fubon-api-mcp-server?label=VS%20Code%20Extension)](https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server)
+[![VS Code Extension Downloads](https://img.shields.io/visual-studio-marketplace/d/mofesto.fubon-api-mcp-server)](https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server)
+[![VS Code Extension Rating](https://img.shields.io/visual-studio-marketplace/r/mofesto.fubon-api-mcp-server)](https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server)
+
 富邦證券 MCP Server 的 VS Code Extension，提供完整的台股交易功能與市場數據查詢。
+
+**Extension ID**: `mofesto.fubon-api-mcp-server`  
+**Publisher**: mofesto  
+**Version**: 1.8.4
 
 ## ✨ 功能特點
 
@@ -20,7 +28,28 @@
 
 ### 1. 安裝 Extension
 
-從 VS Code Marketplace 安裝 "Fubon API MCP Server"
+#### 方式一：從 Marketplace 安裝（推薦）
+
+**Extension ID**: `mofesto.fubon-api-mcp-server`
+
+1. 打開 VS Code
+2. 按 `Ctrl+Shift+X` (或 `Cmd+Shift+X`) 打開擴展面板
+3. 搜尋 "Fubon API MCP Server"
+4. 找到 Publisher 為 **mofesto** 的擴展
+5. 點擊 "Install" 按鈕
+
+或直接訪問 Marketplace：  
+https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server
+
+#### 方式二：手動安裝 VSIX
+
+從 [GitHub Releases](https://github.com/Mofesto/fubon-api-mcp-server/releases) 下載 `.vsix` 檔案：
+
+```bash
+# 在 VS Code 中：
+# Extensions 面板 > ... (更多操作) > Install from VSIX...
+# 選擇下載的 .vsix 檔案
+```
 
 ### 2. 安裝 Python 套件
 
@@ -106,6 +135,7 @@ Extension 使用系統預設的 `python` 命令。如需指定 Python 路徑：
 2. 或修改 `extension.js` 中的 `spawn('python', ...)` 為完整路徑
 
 ## 📚 相關資源
+- **VS Code Marketplace**: https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server
 
 - **PyPI 套件**: https://pypi.org/project/fubon-api-mcp-server/
 - **GitHub 專案**: https://github.com/Mofesto/fubon-api-mcp-server
@@ -115,6 +145,13 @@ Extension 使用系統預設的 `python` 命令。如需指定 Python 路徑：
 ## 🤝 貢獻
 
 歡迎提交 Pull Request 或回報問題！
+### 開發者資訊
+
+- **Extension ID**: `mofesto.fubon-api-mcp-server`
+- **Publisher**: mofesto
+- **Repository**: https://github.com/Mofesto/fubon-api-mcp-server
+- **Marketplace**: https://marketplace.visualstudio.com/publishers/mofesto
+
 
 ## 📄 授權
 
@@ -129,5 +166,7 @@ MIT License
 ---
 
 **開發者**: Mofesto.Cui  
-**版本**: 1.8.0  
+**Publisher**: mofesto  
+**Extension ID**: mofesto.fubon-api-mcp-server  
+**版本**: 1.8.4  
 **最後更新**: 2025-11-04

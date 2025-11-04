@@ -42,6 +42,10 @@ fubon-api-mcp-server/
 ├── fubon_mcp/              # 主要程式碼
 │   ├── __init__.py        # 包初始化
 │   └── server.py          # MCP 伺服器主程式
+├── vscode-extension/       # VS Code Extension
+│   ├── package.json       # Extension 配置
+│   ├── README.md          # Extension 說明
+│   └── src/               # Extension 程式碼
 ├── tests/                  # 測試套件
 ├── examples/               # 使用範例
 ├── docs/                   # 文檔

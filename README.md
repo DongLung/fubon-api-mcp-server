@@ -1,7 +1,8 @@
 # Fubon MCP Server
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
-[![PyPI version](https://img.shields.io/pypi/v/fubon-api-mcp-server.svg)](https://pypi.org/project/fubon-api-mcp-server/)
+[![PyPI version](https://img.shields.io/pypi/v/fubon-api-mcp-server?label=PyPI)](https://pypi.org/project/fubon-api-mcp-server/)
+[![VS Code Extension](https://img.shields.io/visual-studio-marketplace/v/mofesto.fubon-api-mcp-server?label=VS%20Code%20Extension)](https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server)
 [![PyPI downloads](https://img.shields.io/pypi/dm/fubon-api-mcp-server.svg)](https://pypi.org/project/fubon-api-mcp-server/)
 [![codecov](https://codecov.io/gh/Mofesto/fubon-api-mcp-server/branch/main/graph/badge.svg)](https://codecov.io/gh/Mofesto/fubon-api-mcp-server)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -143,9 +144,44 @@ FUBON_DATA_DIR=./data
 python server.py
 ```
 
-### 5. VS Code 配置
+### 5. VS Code Extension 安裝（推薦）
 
-在工作區設定中加入 MCP 伺服器：
+#### 從 Marketplace 安裝
+1. 打開 VS Code
+2. 按 `Ctrl+Shift+X` 打開擴展面板
+3. 搜尋 "Fubon API MCP Server"
+4. 點擊安裝（Publisher: **mofesto**）
+
+或直接訪問：https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server
+
+#### 手動安裝 VSIX
+```bash
+# 從 GitHub Releases 下載 .vsix 檔案
+# 然後在 VS Code 中：Extensions > ... > Install from VSIX
+```
+
+#### 配置 Extension
+按 `Ctrl+,` (或 `Cmd+,`) 打開設定，搜尋 "Fubon MCP"：
+- **Username**: 您的富邦證券帳號
+- **Pfx Path**: PFX 憑證檔案完整路徑
+- **Data Dir**: 數據儲存目錄（選填，預設 `./data`）
+- **Auto Start**: 自動啟動選項（選填，預設 `false`）
+
+#### 使用 Extension
+按 `Ctrl+Shift+P` (或 `Cmd+Shift+P`) 打開命令面板，輸入 "Fubon MCP"：
+- **Start Fubon MCP Server**: 啟動服務
+- **Stop Fubon MCP Server**: 停止服務
+- **Restart Fubon MCP Server**: 重啟服務
+- **Show Fubon MCP Server Logs**: 查看日誌
+
+#### 安全性
+- ✅ 帳號密碼**不會儲存**在設定檔中
+- ✅ 每次啟動時需要重新輸入密碼
+- ✅ 密碼輸入框使用遮罩保護
+
+### 6. VS Code MCP 配置（手動配置方式）
+
+如果不使用 Extension，可在工作區設定中手動配置 MCP 伺服器：
 
 ```json
 {
@@ -397,6 +433,16 @@ fubon-api-mcp-server/
 ├── fubon_mcp/              # 主要程式碼包
 │   ├── __init__.py        # 包初始化
 │   └── server.py          # MCP 伺服器主程式
+├── vscode-extension/       # VS Code Extension
+│   ├── package.json       # Extension 配置
+│   ├── README.md          # Extension 說明
+│   └── src/               # Extension 程式碼
+├── scripts/                # 🆕 管理和發布腳本
+│   ├── version_config.json # 統一版本配置
+│   ├── release.ps1        # 自動發布腳本
+│   ├── update_version.ps1 # 版本更新腳本
+│   ├── generate_release_notes.ps1 # Release Notes 生成
+│   └── README.md          # 腳本使用說明
 ├── examples/               # 示範腳本
 │   ├── demo_*.py          # 各功能演示
 │   └── debug_*.py         # 除錯腳本
@@ -413,7 +459,7 @@ fubon-api-mcp-server/
 ├── requirements.txt       # Python 依賴
 ├── setup.py               # 安裝腳本
 ├── pytest.ini             # 測試配置
-├── run_tests.py           # 測試運行器
+├── pyproject.toml         # 專案配置
 └── README.md              # 專案說明
 ```
 
@@ -443,6 +489,15 @@ fubon-api-mcp-server/
 - 🔒 **網路安全**: 確保網路連線的安全性
 
 ## 📝 更新日誌
+### v1.8.4 (2025-11-04)
+- 🚀 **VS Code Extension**: 完整的 VS Code Extension，一鍵啟動/停止 MCP Server
+- 🔧 **動態版本管理**: 採用 setuptools-scm 從 Git tags 自動生成版本號
+- 📦 **自動化發佈**: PyPI 和 VS Code Marketplace 自動發佈流程
+- 🔒 **安全增強**: Extension 密碼不儲存在設定中，使用安全輸入
+- 📚 **文檔完善**: 新增完整的發佈指南和使用說明
+- 🎯 **Extension ID**: `mofesto.fubon-api-mcp-server`
+- 🐛 **修正**: Release notes 和發佈流程優化
+
 
 ### v1.7.0 (2025-11-03)
 - 🔄 **CI/CD 完善**: 新增完整的 GitHub Actions 工作流程
@@ -512,14 +567,60 @@ black .
 flake8 .
 ```
 
+### 🆕 自動化發布流程
+
+專案使用統一的版本管理系統，所有版本資訊集中在 `scripts/version_config.json`：
+
+```powershell
+# 發布新版本 (patch)
+.\scripts\release.ps1
+
+# 發布 minor 版本
+.\scripts\release.ps1 -BumpType minor
+
+# 發布 major 版本
+.\scripts\release.ps1 -BumpType major
+```
+
+腳本會自動：
+1. 運行測試
+2. 更新所有文件中的版本號
+3. 生成 Release Notes
+4. 創建 Git 標籤
+5. 推送到 GitHub 觸發自動發布
+
+詳細說明請參考 [scripts/README.md](scripts/README.md)
+
 **開發者注意**: 
 - 開發時請確保已安裝 `fubon-neo` 套件
 - 測試需要有效的富邦證券帳號和憑證
 - 請勿在生產環境中提交敏感憑證資訊
+- 版本號統一在 `scripts/version_config.json` 管理
 
 ## 📄 授權條款
 
 本專案採用 [MIT License](LICENSE) 授權。
+## 📦 發佈資訊
+
+### PyPI Package
+- **套件名稱**: `fubon-api-mcp-server`
+- **最新版本**: 1.8.4
+- **安裝**: `pip install fubon-api-mcp-server`
+- **PyPI**: https://pypi.org/project/fubon-api-mcp-server/
+
+### VS Code Extension
+- **Extension ID**: `mofesto.fubon-api-mcp-server`
+- **Publisher**: mofesto
+- **版本**: 1.8.4
+- **Marketplace**: https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server
+- **安裝方式**: 在 VS Code 中搜尋 "Fubon API MCP Server"
+
+### GitHub Repository
+- **Repository**: https://github.com/Mofesto/fubon-api-mcp-server
+- **Issues**: https://github.com/Mofesto/fubon-api-mcp-server/issues
+- **Releases**: https://github.com/Mofesto/fubon-api-mcp-server/releases
+- **Documentation**: https://github.com/Mofesto/fubon-api-mcp-server#readme
+
 
 ## ⚠️ 免責聲明
 
@@ -531,7 +632,16 @@ flake8 .
 ## 👥 作者與致謝
 
 - **開發者**: Mofesto.Cui
+- **Publisher**: mofesto (VS Code Marketplace)
 - **貢獻者**: 歡迎所有貢獻者
+## 🔗 相關連結
+
+- **PyPI Package**: https://pypi.org/project/fubon-api-mcp-server/
+- **VS Code Extension**: https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server
+- **GitHub Repository**: https://github.com/Mofesto/fubon-api-mcp-server
+- **富邦證券 API 官方文檔**: https://www.fbs.com.tw/TradeAPI/docs/
+- **問題回報**: https://github.com/Mofesto/fubon-api-mcp-server/issues
+
 
 ---
 

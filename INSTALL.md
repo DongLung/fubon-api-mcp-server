@@ -1,6 +1,54 @@
 # 安裝指南 - Installation Guide
 
-## 安裝 fubon-api-mcp-server
+## 安裝方式
+
+### 方式 A: VS Code Extension（推薦）
+
+最簡單的安裝和使用方式是透過 VS Code Extension：
+
+#### 1. 從 Marketplace 安裝
+
+**Extension ID**: `mofesto.fubon-api-mcp-server`
+
+```
+1. 打開 VS Code
+2. 按 Ctrl+Shift+X (或 Cmd+Shift+X) 打開擴展面板
+3. 搜尋 "Fubon API MCP Server"
+4. 找到 Publisher 為 "mofesto" 的擴展
+5. 點擊 "Install" 按鈕
+```
+
+或直接訪問：https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server
+
+#### 2. 安裝 Python 套件
+
+Extension 需要 Python 套件支援：
+
+```bash
+pip install fubon-api-mcp-server
+```
+
+#### 3. 配置 Extension
+
+按 `Ctrl+,` 打開設定，搜尋 "Fubon MCP"：
+- **Username**: 您的富邦證券帳號
+- **Pfx Path**: PFX 憑證檔案完整路徑
+- **Data Dir**: 數據儲存目錄（選填）
+- **Auto Start**: 自動啟動（選填）
+
+#### 4. 使用 Extension
+
+按 `Ctrl+Shift+P` 打開命令面板：
+- `Fubon MCP: Start Fubon MCP Server` - 啟動服務
+- `Fubon MCP: Stop Fubon MCP Server` - 停止服務
+- `Fubon MCP: Restart Fubon MCP Server` - 重啟服務
+- `Fubon MCP: Show Fubon MCP Server Logs` - 查看日誌
+
+✅ **優點**: 一鍵操作、密碼安全輸入、即時日誌顯示
+
+---
+
+## 方式 B: Python Package 安裝
 
 ### 方法 1: 從 PyPI 安裝 (推薦)
 
@@ -185,10 +233,13 @@ git push
 ## 取得協助
 
 - **專案問題**: https://github.com/Mofesto/fubon-api-mcp-server/issues
+- **VS Code Extension**: https://marketplace.visualstudio.com/items?itemName=mofesto.fubon-api-mcp-server
 - **富邦 API**: https://www.fbs.com.tw/TradeAPI/docs/
 - **文檔**: https://github.com/Mofesto/fubon-api-mcp-server#readme
 
 ---
 
-**最後更新**: 2025-11-04  
+**最後更新**: 2025-11-04
+**當前版本**: 1.8.4
+**Extension ID**: mofesto.fubon-api-mcp-server
 **fubon_neo 版本**: 2.2.5
