@@ -39,7 +39,7 @@ class TestMarketDataServices:
         ]
         mock_reststock.intraday.tickers.return_value = mock_result
 
-        result = get_intraday_tickers.fn({"market": "TSE"})
+        result = get_intraday_tickers.fn({"market": "TSE"}) if hasattr(get_intraday_tickers, "fn") else get_intraday_tickers({"market": "TSE"})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 2
@@ -53,7 +53,7 @@ class TestMarketDataServices:
         mock_result = {"symbol": "2330", "price": 500.0, "volume": 1000000}
         mock_reststock.intraday.ticker.return_value = mock_result
 
-        result = get_intraday_ticker.fn({"symbol": "2330"})
+        result = get_intraday_ticker.fn({"symbol": "2330"}) if hasattr(get_intraday_ticker, "fn") else get_intraday_ticker({"symbol": "2330"})
 
         assert result["status"] == "success"
         assert result["data"]["symbol"] == "2330"
@@ -71,7 +71,7 @@ class TestMarketDataServices:
         }
         mock_reststock.intraday.quote.return_value = mock_result
 
-        result = get_intraday_quote.fn({"symbol": "2330"})
+        result = get_intraday_quote.fn({"symbol": "2330"}) if hasattr(get_intraday_quote, "fn") else get_intraday_quote({"symbol": "2330"})
 
         assert result["status"] == "success"
         assert result["data"]["price"] == 500.0
@@ -87,7 +87,7 @@ class TestMarketDataServices:
         ]
         mock_reststock.intraday.candles.return_value = mock_result
 
-        result = get_intraday_candles.fn({"symbol": "2330"})
+        result = get_intraday_candles.fn({"symbol": "2330"}) if hasattr(get_intraday_candles, "fn") else get_intraday_candles({"symbol": "2330"})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 2
@@ -103,7 +103,7 @@ class TestMarketDataServices:
         ]
         mock_reststock.intraday.trades.return_value = mock_result
 
-        result = get_intraday_trades.fn({"symbol": "2330"})
+        result = get_intraday_trades.fn({"symbol": "2330"}) if hasattr(get_intraday_trades, "fn") else get_intraday_trades({"symbol": "2330"})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 2
@@ -119,7 +119,7 @@ class TestMarketDataServices:
         ]
         mock_reststock.intraday.volumes.return_value = mock_result
 
-        result = get_intraday_volumes.fn({"symbol": "2330"})
+        result = get_intraday_volumes.fn({"symbol": "2330"}) if hasattr(get_intraday_volumes, "fn") else get_intraday_volumes({"symbol": "2330"})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 2
@@ -135,7 +135,7 @@ class TestMarketDataServices:
         ]
         mock_reststock.snapshot.quotes.return_value = mock_result
 
-        result = get_snapshot_quotes.fn({"market": "TSE"})
+        result = get_snapshot_quotes.fn({"market": "TSE"}) if hasattr(get_snapshot_quotes, "fn") else get_snapshot_quotes({"market": "TSE"})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 2
@@ -151,7 +151,7 @@ class TestMarketDataServices:
         ]
         mock_reststock.snapshot.movers.return_value = mock_result
 
-        result = get_snapshot_movers.fn({"market": "TSE"})
+        result = get_snapshot_movers.fn({"market": "TSE"}) if hasattr(get_snapshot_movers, "fn") else get_snapshot_movers({"market": "TSE"})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 2
@@ -167,7 +167,7 @@ class TestMarketDataServices:
         ]
         mock_reststock.snapshot.actives.return_value = mock_result
 
-        result = get_snapshot_actives.fn({"market": "TSE"})
+        result = get_snapshot_actives.fn({"market": "TSE"}) if hasattr(get_snapshot_actives, "fn") else get_snapshot_actives({"market": "TSE"})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 2
@@ -185,7 +185,7 @@ class TestMarketDataServices:
         }
         mock_reststock.historical.stats.return_value = mock_result
 
-        result = get_historical_stats.fn({"symbol": "2330"})
+        result = get_historical_stats.fn({"symbol": "2330"}) if hasattr(get_historical_stats, "fn") else get_historical_stats({"symbol": "2330"})
 
         assert result["status"] == "success"
         assert result["data"]["high_52w"] == 600.0
@@ -203,7 +203,7 @@ class TestMarketDataServices:
         }
         mock_sdk.marketdata.realtime.quote.return_value = mock_result
 
-        result = get_realtime_quotes.fn({"symbol": "2330"})
+        result = get_realtime_quotes.fn({"symbol": "2330"}) if hasattr(get_realtime_quotes, "fn") else get_realtime_quotes({"symbol": "2330"})
 
         assert result["status"] == "success"
         assert result["data"]["price"] == 500.0
@@ -215,7 +215,7 @@ class TestMarketDataServices:
 
         mock_reststock.intraday.ticker.side_effect = Exception("API Error")
 
-        result = get_intraday_ticker.fn({"symbol": "2330"})
+        result = get_intraday_ticker.fn({"symbol": "2330"}) if hasattr(get_intraday_ticker, "fn") else get_intraday_ticker({"symbol": "2330"})
 
         assert result["status"] == "error"
         assert "API Error" in result["message"]
@@ -224,7 +224,7 @@ class TestMarketDataServices:
         """Test market data when reststock is not initialized."""
         config.reststock = None
 
-        result = get_intraday_ticker.fn({"symbol": "2330"})
+        result = get_intraday_ticker.fn({"symbol": "2330"}) if hasattr(get_intraday_ticker, "fn") else get_intraday_ticker({"symbol": "2330"})
 
         assert result["status"] == "error"
         assert "REST client not initialized" in result["message"]
@@ -235,19 +235,7 @@ class TestMarketDataServiceIntegration:
 
     def test_all_market_data_functions_importable(self):
         """Test that all market data service functions can be imported."""
-        from fubon_mcp.market_data_service import (
-            get_historical_stats,
-            get_intraday_candles,
-            get_intraday_quote,
-            get_intraday_ticker,
-            get_intraday_tickers,
-            get_intraday_trades,
-            get_intraday_volumes,
-            get_realtime_quotes,
-            get_snapshot_actives,
-            get_snapshot_movers,
-            get_snapshot_quotes,
-        )
+        # Functions are already imported at module level above; verify they expose .fn attribute.
 
         # Test that functions have .fn attribute (MCP FunctionTool objects)
         assert hasattr(get_intraday_tickers, 'fn')

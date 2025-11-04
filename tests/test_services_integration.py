@@ -39,7 +39,7 @@ class TestHistoricalDataService:
             "data": [{"date": "2024-01-01", "open": 500.0, "close": 505.0, "volume": 1000}]
         }
 
-        result = historical_candles.fn({"symbol": "2330", "from_date": "2024-01-01", "to_date": "2024-01-02"})
+        result = historical_candles.fn({"symbol": "2330", "from_date": "2024-01-01", "to_date": "2024-01-02"}) if hasattr(historical_candles, "fn") else historical_candles({"symbol": "2330", "from_date": "2024-01-01", "to_date": "2024-01-02"})
         print(f"Result: {result}")
         
         assert result["status"] == "success"

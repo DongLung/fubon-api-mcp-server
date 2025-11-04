@@ -42,7 +42,7 @@ class TestReportsServices:
         ]
         mock_sdk.stock.get_order_results.return_value = mock_result
 
-        result = get_order_results.fn({"account": "12345678"})
+        result = get_order_results.fn({"account": "12345678"}) if hasattr(get_order_results, "fn") else get_order_results({"account": "12345678"})
 
         print(f"DEBUG: Result = {result}")
         print(f"DEBUG: config.accounts = {config.accounts}")
@@ -57,7 +57,7 @@ class TestReportsServices:
         """Test order results retrieval with invalid account."""
         config.accounts = mock_accounts
 
-        result = get_order_results.fn({"account": "99999999"})
+        result = get_order_results.fn({"account": "99999999"}) if hasattr(get_order_results, "fn") else get_order_results({"account": "99999999"})
 
         assert result["status"] == "error"
         assert "account 99999999 not found" in result["message"]
@@ -75,7 +75,7 @@ class TestReportsServices:
             }
         ]
 
-        result = get_order_reports.fn({"limit": 10})
+        result = get_order_reports.fn({"limit": 10}) if hasattr(get_order_reports, "fn") else get_order_reports({"limit": 10})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 1
@@ -94,7 +94,7 @@ class TestReportsServices:
             }
         ]
 
-        result = get_order_changed_reports.fn({"limit": 5})
+        result = get_order_changed_reports.fn({"limit": 5}) if hasattr(get_order_changed_reports, "fn") else get_order_changed_reports({"limit": 5})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 1
@@ -113,7 +113,7 @@ class TestReportsServices:
             }
         ]
 
-        result = get_filled_reports.fn({"limit": 20})
+        result = get_filled_reports.fn({"limit": 20}) if hasattr(get_filled_reports, "fn") else get_filled_reports({"limit": 20})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 1
@@ -131,7 +131,7 @@ class TestReportsServices:
             }
         ]
 
-        result = get_event_reports.fn({"limit": 15})
+        result = get_event_reports.fn({"limit": 15}) if hasattr(get_event_reports, "fn") else get_event_reports({"limit": 15})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 1
@@ -147,7 +147,7 @@ class TestReportsServices:
         callbacks.latest_filled_reports = [{"type": "filled", "order_no": "12347"}]
         callbacks.latest_event_reports = [{"type": "event", "order_no": "12348"}]
 
-        result = get_all_reports.fn({})
+        result = get_all_reports.fn({}) if hasattr(get_all_reports, "fn") else get_all_reports({})
 
         assert result["status"] == "success"
         assert "order_reports" in result["data"]
@@ -164,7 +164,7 @@ class TestReportsServices:
         # Ensure callbacks are empty
         callbacks.latest_order_reports = []
 
-        result = get_order_reports.fn({"limit": 10})
+        result = get_order_reports.fn({"limit": 10}) if hasattr(get_order_reports, "fn") else get_order_reports({"limit": 10})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 0

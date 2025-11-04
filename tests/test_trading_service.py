@@ -161,7 +161,7 @@ class TestPlaceOrder:
         mock_result.data = {"order_no": "12345"}
         mock_sdk.stock.place_order.return_value = mock_result
 
-        result = place_order.fn(sample_order_data)
+        result = place_order.fn(sample_order_data) if hasattr(place_order, "fn") else place_order(sample_order_data)
 
         assert result["status"] == "success"
         assert result["data"] is not None  # Mock result object
@@ -172,7 +172,7 @@ class TestPlaceOrder:
         """Test order placement with invalid account."""
         config.accounts = mock_accounts
 
-        result = place_order.fn({**sample_order_data, "account": "99999999"})
+        result = place_order.fn({**sample_order_data, "account": "99999999"}) if hasattr(place_order, "fn") else place_order({**sample_order_data, "account": "99999999"})
 
         assert result["status"] == "error"
         assert "Account 99999999 not found" in result["message"]
@@ -184,7 +184,7 @@ class TestPlaceOrder:
 
         mock_sdk.stock.place_order.side_effect = Exception("API Error")
 
-        result = place_order.fn(sample_order_data)
+        result = place_order.fn(sample_order_data) if hasattr(place_order, "fn") else place_order(sample_order_data)
 
         assert result["status"] == "error"
         assert "Order placement failed" in result["message"]
@@ -213,6 +213,10 @@ class TestModifyPrice:
             "account": "12345678",
             "order_no": "12345",
             "new_price": 505.0
+        }) if hasattr(modify_price, "fn") else modify_price({
+            "account": "12345678",
+            "order_no": "12345",
+            "new_price": 505.0
         })
 
         assert result["status"] == "success"
@@ -229,6 +233,10 @@ class TestModifyPrice:
         mock_sdk.stock.get_order_results.return_value = mock_order_results
 
         result = modify_price.fn({
+            "account": "12345678",
+            "order_no": "99999",
+            "new_price": 505.0
+        }) if hasattr(modify_price, "fn") else modify_price({
             "account": "12345678",
             "order_no": "99999",
             "new_price": 505.0
@@ -261,6 +269,10 @@ class TestModifyQuantity:
             "account": "12345678",
             "order_no": "12345",
             "new_quantity": 2000
+        }) if hasattr(modify_quantity, "fn") else modify_quantity({
+            "account": "12345678",
+            "order_no": "12345",
+            "new_quantity": 2000
         })
 
         assert result["status"] == "success"
@@ -289,6 +301,9 @@ class TestCancelOrder:
         result = cancel_order.fn({
             "account": "12345678",
             "order_no": "12345"
+        }) if hasattr(cancel_order, "fn") else cancel_order({
+            "account": "12345678",
+            "order_no": "12345"
         })
 
         assert result["status"] == "success"
@@ -305,6 +320,9 @@ class TestCancelOrder:
         mock_sdk.stock.get_order_results.return_value = mock_order_results
 
         result = cancel_order.fn({
+            "account": "12345678",
+            "order_no": "99999"
+        }) if hasattr(cancel_order, "fn") else cancel_order({
             "account": "12345678",
             "order_no": "99999"
         })
@@ -340,6 +358,10 @@ class TestBatchPlaceOrder:
             "account": "12345678",
             "orders": orders,
             "max_workers": 5
+        }) if hasattr(batch_place_order, "fn") else batch_place_order({
+            "account": "12345678",
+            "orders": orders,
+            "max_workers": 5
         })
 
         assert result["status"] == "success"
@@ -348,6 +370,10 @@ class TestBatchPlaceOrder:
     def test_batch_place_order_empty_orders(self):
         """Test batch order placement with empty order list."""
         result = batch_place_order.fn({
+            "account": "12345678",
+            "orders": [],
+            "max_workers": 5
+        }) if hasattr(batch_place_order, "fn") else batch_place_order({
             "account": "12345678",
             "orders": [],
             "max_workers": 5
@@ -363,6 +389,9 @@ class TestBatchPlaceOrder:
         orders = [{"symbol": "2330", "quantity": 1000, "price": 500.0, "buy_sell": "Buy"}]
 
         result = batch_place_order.fn({
+            "account": "99999999",
+            "orders": orders
+        }) if hasattr(batch_place_order, "fn") else batch_place_order({
             "account": "99999999",
             "orders": orders
         })
