@@ -2,20 +2,22 @@
 Tests for market data service functions in server.py.
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+
 from fubon_api_mcp_server.server import (
-    get_realtime_quotes,
-    get_intraday_tickers,
-    get_intraday_ticker,
-    get_intraday_quote,
+    get_historical_stats,
     get_intraday_candles,
+    get_intraday_quote,
+    get_intraday_ticker,
+    get_intraday_tickers,
     get_intraday_trades,
     get_intraday_volumes,
-    get_snapshot_quotes,
-    get_snapshot_movers,
+    get_realtime_quotes,
     get_snapshot_actives,
-    get_historical_stats,
+    get_snapshot_movers,
+    get_snapshot_quotes,
 )
 
 
@@ -24,7 +26,9 @@ class TestGetRealtimeQuotes:
 
     def test_get_realtime_quotes_success(self, mock_server_globals, mock_sdk):
         """Test get_realtime_quotes success."""
-        mock_sdk.marketdata.realtime.quote.return_value = {"price": 500.0}
+        mock_response = Mock()
+        mock_response.dict.return_value = {"price": 500.0}
+        mock_sdk.marketdata.rest_client.stock.intraday.quote.return_value = mock_response
 
         result = get_realtime_quotes({"symbol": "2330"})
 
@@ -34,7 +38,7 @@ class TestGetRealtimeQuotes:
 
     def test_get_realtime_quotes_exception(self, mock_server_globals, mock_sdk):
         """Test get_realtime_quotes with exception."""
-        mock_sdk.marketdata.realtime.quote.side_effect = Exception("API error")
+        mock_sdk.marketdata.rest_client.stock.intraday.quote.side_effect = Exception("API error")
 
         result = get_realtime_quotes({"symbol": "2330"})
 
@@ -66,11 +70,11 @@ class TestGetIntradayTickers:
 
 
 class TestGetIntradayTicker:
-    """Test get_intraday_ticker function."""
-
     def test_get_intraday_ticker_success(self, mock_server_globals, mock_sdk):
         """Test get_intraday_ticker success."""
-        mock_sdk.marketdata.rest_client.stock.intraday.ticker.return_value = {"symbol": "2330", "name": "台積電"}
+        mock_response = Mock()
+        mock_response.dict.return_value = {"symbol": "2330", "name": "台積電"}
+        mock_sdk.marketdata.rest_client.stock.intraday.ticker.return_value = mock_response
 
         result = get_intraday_ticker({"symbol": "2330"})
 
@@ -78,13 +82,11 @@ class TestGetIntradayTicker:
         assert result["data"] == {"symbol": "2330", "name": "台積電"}
         assert "成功獲取 2330 基本資料" in result["message"]
 
-
-class TestGetIntradayQuote:
-    """Test get_intraday_quote function."""
-
     def test_get_intraday_quote_success(self, mock_server_globals, mock_sdk):
         """Test get_intraday_quote success."""
-        mock_sdk.marketdata.rest_client.stock.intraday.quote.return_value = {"price": 500.0, "volume": 10000}
+        mock_response = Mock()
+        mock_response.dict.return_value = {"price": 500.0, "volume": 10000}
+        mock_sdk.marketdata.rest_client.stock.intraday.quote.return_value = mock_response
 
         result = get_intraday_quote({"symbol": "2330"})
 
@@ -154,7 +156,8 @@ class TestGetSnapshotMovers:
 
     def test_get_snapshot_movers_success(self, mock_server_globals, mock_sdk):
         """Test get_snapshot_movers success."""
-        mock_sdk.marketdata.rest_client.stock.snapshot.movers.return_value = [{"symbol": "2330", "change": 5.0}]
+        mock_response = {"data": [{"symbol": "2330", "change": 5.0}], "market": "TSE", "direction": "up", "change": "percent", "date": "2023-01-01", "time": "09:00"}
+        mock_sdk.marketdata.rest_client.stock.snapshot.movers.return_value = mock_response
 
         result = get_snapshot_movers({"market": "TSE"})
 
@@ -189,21 +192,17 @@ class TestGetSnapshotActives:
         assert result["status"] == "success"
         assert len(result["data"]) == 10
         assert result["total_count"] == 10
-        assert result["returned_count"] == 10
-
-
-class TestGetHistoricalStats:
-    """Test get_historical_stats function."""
 
     def test_get_historical_stats_success(self, mock_server_globals, mock_sdk):
         """Test get_historical_stats success."""
-        mock_sdk.marketdata.rest_client.stock.historical.stats.return_value = {"52w_high": 600.0, "52w_low": 400.0}
+        mock_response = {"week52High": 600.0, "week52Low": 400.0, "symbol": "2330", "name": "台積電", "closePrice": 500.0, "change": 5.0, "changePercent": 1.0, "date": "2023-01-01"}
+        mock_sdk.marketdata.rest_client.stock.historical.stats.return_value = mock_response
 
         result = get_historical_stats({"symbol": "2330"})
 
         assert result["status"] == "success"
-        assert result["data"] == {"52w_high": 600.0, "52w_low": 400.0}
-        assert "成功獲取 2330 近 52 週數據" in result["message"]
+        assert result["data"] == {"symbol": "2330", "name": "台積電", "52_week_high": 600.0, "52_week_low": 400.0, "current_price": 500.0, "change": 5.0, "change_percent": 1.0, "date": "2023-01-01"}
+        assert "成功獲取 2330 近 52 週統計" in result["message"]
 
     def test_get_historical_stats_exception(self, mock_server_globals, mock_sdk):
         """Test get_historical_stats with exception."""

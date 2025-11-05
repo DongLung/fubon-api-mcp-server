@@ -74,38 +74,39 @@ def validate_and_get_account(account: str) -> Tuple[Optional[Any], Optional[str]
     # Always try to initialize SDK and login for MCP tool calls
     # since MCP tools run in separate contexts
     try:
-        from fubon_neo.sdk import FubonSDK
-        from dotenv import load_dotenv
         import os
         from pathlib import Path
-        
+
+        from dotenv import load_dotenv
+        from fubon_neo.sdk import FubonSDK
+
         # Load .env file from the project root
         project_root = Path(__file__).parent.parent
         env_path = project_root / ".env"
         load_dotenv(env_path)
-        
+
         sdk = FubonSDK()
-        
+
         # Get credentials from environment
         username = os.getenv("FUBON_USERNAME")
         password = os.getenv("FUBON_PASSWORD")
         pfx_path = os.getenv("FUBON_PFX_PATH")
         pfx_password = os.getenv("FUBON_PFX_PASSWORD", "")
-        
+
         if not username or not password or not pfx_path:
             return None, "Account authentication failed, please check if credentials have expired"
-        
+
         # Login and get accounts
         accounts = sdk.login(username, password, pfx_path, pfx_password)
-        
+
         if not accounts or not hasattr(accounts, "is_success") or not accounts.is_success:
             return None, "Account authentication failed, please check if credentials have expired"
-        
+
         # Store in config_module for potential reuse
         config_module.sdk = sdk
         config_module.accounts = accounts
         # Note: reststock is initialized only when needed for market data operations
-        
+
     except Exception as e:
         return None, f"Account authentication failed: {str(e)}"
 

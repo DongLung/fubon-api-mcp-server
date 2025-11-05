@@ -40,8 +40,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 # Set encoding for stdout and stderr to handle Chinese characters properly
-sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -1109,9 +1109,10 @@ def get_realtime_quotes(args: Dict) -> dict:
 
         # 使用 intraday API 獲取即時行情
         from fubon_neo.fugle_marketdata.rest.base_rest import FugleAPIError
+
         try:
             result = reststock.intraday.quote(symbol=symbol)
-            return {"status": "success", "data": result, "message": f"成功獲取 {symbol} 即時行情"}
+            return {"status": "success", "data": result.dict() if hasattr(result, 'dict') else result, "message": f"成功獲取 {symbol} 即時行情"}
         except FugleAPIError as e:
             return {"status": "error", "data": None, "message": f"API 錯誤: {e}"}
     except Exception as e:
@@ -1181,7 +1182,7 @@ def get_intraday_ticker(args: Dict) -> dict:
         symbol = validated_args.symbol
 
         result = reststock.intraday.ticker(symbol)
-        return {"status": "success", "data": result, "message": f"成功獲取 {symbol} 基本資料"}
+        return {"status": "success", "data": result.dict() if hasattr(result, 'dict') else result, "message": f"成功獲取 {symbol} 基本資料"}
     except Exception as e:
         return {"status": "error", "data": None, "message": f"獲取基本資料失敗: {str(e)}"}
 
@@ -1199,7 +1200,7 @@ def get_intraday_quote(args: Dict) -> dict:
         symbol = validated_args.symbol
 
         result = reststock.intraday.quote(symbol)
-        return {"status": "success", "data": result, "message": f"成功獲取 {symbol} 即時報價"}
+        return {"status": "success", "data": result.dict() if hasattr(result, 'dict') else result, "message": f"成功獲取 {symbol} 即時報價"}
     except Exception as e:
         return {"status": "error", "data": None, "message": f"獲取即時報價失敗: {str(e)}"}
 
@@ -1335,7 +1336,7 @@ def get_snapshot_movers(args: Dict) -> dict:
 
         # 構建API調用參數 - 總是傳遞必要參數
         api_params = {"market": market, "direction": direction, "change": change}
-        
+
         # 篩選條件參數
         filter_params = {}
         if gt is not None:
@@ -1350,13 +1351,13 @@ def get_snapshot_movers(args: Dict) -> dict:
             filter_params["eq"] = eq
         if type_param:
             filter_params["type"] = type_param
-            
+
         # 合併參數
         api_params.update(filter_params)
 
         # 調試輸出
         print(f"API params: {api_params}", file=sys.stderr)
-        
+
         result = reststock.snapshot.movers(**api_params)
 
         # API 返回的是字典格式，包含 'data' 鍵
@@ -1375,7 +1376,7 @@ def get_snapshot_movers(args: Dict) -> dict:
                     "change": result.get("change"),
                     "date": result.get("date"),
                     "time": result.get("time"),
-                    "message": f"成功獲取 {market} {direction} {change}排行 (顯示前 {len(limited_data)} 筆，共 {len(data)} 筆)",
+                    "message": f"成功獲取 {market} 漲跌幅排行 (顯示前 {len(limited_data)} 筆，共 {len(data)} 筆)",
                 }
             else:
                 return {"status": "error", "data": None, "message": "API 返回的 data 欄位不是列表格式"}
@@ -1424,7 +1425,7 @@ def get_snapshot_actives(args: Dict) -> dict:
                     "trade": result.get("trade"),
                     "date": result.get("date"),
                     "time": result.get("time"),
-                    "message": f"成功獲取 {market} {trade}排行 (顯示前 {len(limited_data)} 筆，共 {len(data)} 筆)",
+                    "message": f"成功獲取 {market} 成交量值排行 (顯示前 {len(limited_data)} 筆，共 {len(data)} 筆)",
                 }
             else:
                 return {"status": "error", "data": None, "message": "API 返回的 data 欄位不是列表格式"}
@@ -1451,16 +1452,16 @@ def get_historical_stats(args: Dict) -> dict:
         result = reststock.historical.stats(symbol=symbol)
 
         # 檢查返回格式
-        if isinstance(result, dict) and "week52High" in result and "week52Low" in result:
+        if isinstance(result, dict) and (("week52High" in result) or ("52w_high" in result)) and (("week52Low" in result) or ("52w_low" in result)):
             stats = {
                 "symbol": result.get("symbol"),
                 "name": result.get("name"),
-                "52_week_high": result.get("week52High"),
-                "52_week_low": result.get("week52Low"),
+                "52_week_high": result.get("week52High") or result.get("52w_high"),
+                "52_week_low": result.get("week52Low") or result.get("52w_low"),
                 "current_price": result.get("closePrice"),
                 "change": result.get("change"),
                 "change_percent": result.get("changePercent"),
-                "date": result.get("date")
+                "date": result.get("date"),
             }
             return {"status": "success", "data": stats, "message": f"成功獲取 {symbol} 近 52 週統計"}
         else:

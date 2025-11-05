@@ -1,17 +1,20 @@
 """
 Test account service functions from server.py.
 """
+
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+
 from fubon_api_mcp_server.server import (
+    _get_account_financial_info,
+    _get_all_accounts_basic_info,
+    _get_basic_account_info,
     get_account_info,
     get_bank_balance,
     get_inventory,
     get_settlement_info,
     get_unrealized_pnl,
-    _get_all_accounts_basic_info,
-    _get_basic_account_info,
-    _get_account_financial_info,
 )
 
 

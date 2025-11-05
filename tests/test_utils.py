@@ -1,18 +1,21 @@
 """
 Test utility functions from server.py.
 """
+
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+
 from fubon_api_mcp_server.server import (
-    validate_and_get_account,
-    get_order_by_no,
-    _safe_api_call,
-    _find_target_order,
     _convert_order_data_to_enums,
     _create_order_object,
+    _find_target_order,
+    _safe_api_call,
+    get_order_by_no,
     process_historical_data,
     read_local_stock_data,
     save_to_local_csv,
+    validate_and_get_account,
 )
 
 
@@ -34,7 +37,7 @@ class TestValidateAndGetAccount:
 
     def test_validate_and_get_account_auth_failed(self, mock_server_globals):
         """Test authentication failure."""
-        with patch('fubon_api_mcp_server.server.accounts', None):
+        with patch("fubon_api_mcp_server.server.accounts", None):
             account_obj, error = validate_and_get_account("123456")
             assert account_obj is None
             assert "帳戶認證失敗" in error
@@ -89,6 +92,7 @@ class TestSafeApiCall:
 
     def test_safe_api_call_failure(self, mock_sdk):
         """Test failed API call."""
+
         def mock_api_func():
             raise Exception("API error")
 
@@ -130,7 +134,7 @@ class TestConvertOrderDataToEnums:
             "market_type": "Common",
             "price_type": "Limit",
             "time_in_force": "ROD",
-            "order_type": "Stock"
+            "order_type": "Stock",
         }
 
         enums = _convert_order_data_to_enums(order_data)
@@ -146,12 +150,7 @@ class TestCreateOrderObject:
 
     def test_create_order_object(self):
         """Test order object creation."""
-        order_data = {
-            "symbol": "2330",
-            "quantity": 1000,
-            "price": 500.0,
-            "user_def": "test"
-        }
+        order_data = {"symbol": "2330", "quantity": 1000, "price": 500.0, "user_def": "test"}
 
         # Use real enums instead of mocks
         from fubon_neo.constant import BSAction, MarketType, OrderType, PriceType, TimeInForce
@@ -161,7 +160,7 @@ class TestCreateOrderObject:
             "market_type": MarketType.Common,
             "price_type": PriceType.Limit,
             "time_in_force": TimeInForce.ROD,
-            "order_type": OrderType.Stock
+            "order_type": OrderType.Stock,
         }
 
         order = _create_order_object(order_data, enums)
@@ -174,9 +173,9 @@ class TestProcessHistoricalData:
     def test_process_historical_data(self, sample_historical_data):
         """Test historical data processing."""
         processed = process_historical_data(sample_historical_data)
-        assert 'vol_value' in processed.columns
-        assert 'price_change' in processed.columns
-        assert 'change_ratio' in processed.columns
+        assert "vol_value" in processed.columns
+        assert "price_change" in processed.columns
+        assert "change_ratio" in processed.columns
 
 
 class TestReadLocalStockData:
@@ -187,14 +186,14 @@ class TestReadLocalStockData:
         result = read_local_stock_data("NONEXISTENT")
         assert result is None
 
-    @patch('pathlib.Path.exists')
-    @patch('pandas.read_csv')
+    @patch("pathlib.Path.exists")
+    @patch("pandas.read_csv")
     def test_read_local_stock_data_exists(self, mock_read_csv, mock_exists):
         """Test reading existing file."""
         import pandas as pd
 
         mock_exists.return_value = True
-        mock_df = pd.DataFrame({'date': ['2023-01-01'], 'close': [100]})
+        mock_df = pd.DataFrame({"date": ["2023-01-01"], "close": [100]})
         mock_read_csv.return_value = mock_df
 
         result = read_local_stock_data("2330")
@@ -204,16 +203,16 @@ class TestReadLocalStockData:
 class TestSaveToLocalCsv:
     """Test save_to_local_csv function."""
 
-    @patch('os.path.exists')
-    @patch('pandas.DataFrame.to_csv')
-    @patch('shutil.move')
+    @patch("os.path.exists")
+    @patch("pandas.DataFrame.to_csv")
+    @patch("shutil.move")
     def test_save_to_local_csv(self, mock_move, mock_to_csv, mock_exists):
         """Test saving CSV data."""
         import pandas as pd
 
         mock_exists.return_value = False
 
-        test_data = [{'date': '2023-01-01', 'close': 100}]
+        test_data = [{"date": "2023-01-01", "close": 100}]
         save_to_local_csv("2330", test_data)
 
         mock_to_csv.assert_called_once()

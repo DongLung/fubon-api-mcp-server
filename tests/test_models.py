@@ -4,34 +4,35 @@ Tests for models in server.py.
 
 import pytest
 from pydantic import ValidationError
+
 from fubon_api_mcp_server.server import (
+    BatchPlaceOrderArgs,
+    CancelOrderArgs,
     GetAccountInfoArgs,
     GetBankBalanceArgs,
-    GetInventoryArgs,
-    GetSettlementArgs,
-    GetUnrealizedPnLArgs,
-    GetIntradayTickersArgs,
-    GetIntradayTickerArgs,
-    GetIntradayQuoteArgs,
+    GetEventReportsArgs,
+    GetFilledReportsArgs,
+    GetHistoricalStatsArgs,
     GetIntradayCandlesArgs,
+    GetIntradayQuoteArgs,
+    GetIntradayTickerArgs,
+    GetIntradayTickersArgs,
     GetIntradayTradesArgs,
     GetIntradayVolumesArgs,
-    GetSnapshotQuotesArgs,
-    GetSnapshotMoversArgs,
-    GetSnapshotActivesArgs,
-    GetHistoricalStatsArgs,
-    GetRealtimeQuotesArgs,
-    GetOrderResultsArgs,
-    GetOrderReportsArgs,
+    GetInventoryArgs,
     GetOrderChangedReportsArgs,
-    GetFilledReportsArgs,
-    GetEventReportsArgs,
-    PlaceOrderArgs,
-    CancelOrderArgs,
+    GetOrderReportsArgs,
+    GetOrderResultsArgs,
+    GetRealtimeQuotesArgs,
+    GetSettlementArgs,
+    GetSnapshotActivesArgs,
+    GetSnapshotMoversArgs,
+    GetSnapshotQuotesArgs,
+    GetUnrealizedPnLArgs,
+    HistoricalCandlesArgs,
     ModifyPriceArgs,
     ModifyQuantityArgs,
-    BatchPlaceOrderArgs,
-    HistoricalCandlesArgs,
+    PlaceOrderArgs,
 )
 
 
@@ -135,13 +136,7 @@ class TestTradingArgs:
 
     def test_place_order_args_valid(self):
         """Test PlaceOrderArgs with valid data."""
-        args = PlaceOrderArgs(
-            account="123456",
-            symbol="2330",
-            quantity=1000,
-            price=500.0,
-            buy_sell="Buy"
-        )
+        args = PlaceOrderArgs(account="123456", symbol="2330", quantity=1000, price=500.0, buy_sell="Buy")
         assert args.account == "123456"
         assert args.symbol == "2330"
         assert args.quantity == 1000
@@ -174,14 +169,7 @@ class TestTradingArgs:
 
     def test_batch_place_order_args_valid(self):
         """Test BatchPlaceOrderArgs with valid data."""
-        orders = [
-            {
-                "symbol": "2330",
-                "quantity": 1000,
-                "price": 500.0,
-                "buy_sell": "Buy"
-            }
-        ]
+        orders = [{"symbol": "2330", "quantity": 1000, "price": 500.0, "buy_sell": "Buy"}]
         args = BatchPlaceOrderArgs(account="123456", orders=orders)
         assert args.account == "123456"
         assert len(args.orders) == 1
@@ -230,11 +218,7 @@ class TestHistoricalArgs:
 
     def test_historical_candles_args_valid(self):
         """Test HistoricalCandlesArgs with valid data."""
-        args = HistoricalCandlesArgs(
-            symbol="2330",
-            from_date="2023-01-01",
-            to_date="2023-12-31"
-        )
+        args = HistoricalCandlesArgs(symbol="2330", from_date="2023-01-01", to_date="2023-12-31")
         assert args.symbol == "2330"
         assert args.from_date == "2023-01-01"
         assert args.to_date == "2023-12-31"

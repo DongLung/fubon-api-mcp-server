@@ -32,9 +32,10 @@
 __version__ = "1.6.0"
 __author__ = "Fubon MCP Team"
 
+from . import config
+
 # 匯入主要組件
 from .server import main, mcp
-from . import config
 
 # 定義包的公開介面
 __all__ = ["mcp", "main", "config"]
