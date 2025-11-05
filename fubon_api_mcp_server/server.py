@@ -1212,7 +1212,7 @@ def get_intraday_candles(args: Dict) -> dict:
         validated_args = GetIntradayCandlesArgs(**args)
         symbol = validated_args.symbol
 
-        result = reststock.intraday.candles(symbol)
+        result = reststock.intraday.candles(symbol=symbol)
         return {"status": "success", "data": result, "message": f"成功獲取 {symbol} 盤中 K 線"}
     except Exception as e:
         return {"status": "error", "data": None, "message": f"獲取盤中 K 線失敗: {str(e)}"}
@@ -1248,7 +1248,7 @@ def get_intraday_volumes(args: Dict) -> dict:
         validated_args = GetIntradayVolumesArgs(**args)
         symbol = validated_args.symbol
 
-        result = reststock.intraday.volumes(symbol)
+        result = reststock.intraday.volumes(symbol=symbol)
         return {"status": "success", "data": result, "message": f"成功獲取 {symbol} 分價量表"}
     except Exception as e:
         return {"status": "error", "data": None, "message": f"獲取分價量表失敗: {str(e)}"}
