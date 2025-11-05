@@ -12,11 +12,11 @@
 - 批量並行下單功能
 
 使用方式:
-    from fubon_api_mcp_server import main
+    from fubon_mcp import main
     main()  # 啟動 MCP 服務器
 
 或通過命令行:
-    python -m fubon_api_mcp_server.server
+    python -m fubon_mcp.server
 
 環境變數:
 - FUBON_USERNAME: 富邦證券帳號
@@ -25,107 +25,16 @@
 - FUBON_PFX_PASSWORD: PFX 憑證密碼（可選）
 - FUBON_DATA_DIR: 本地數據儲存目錄（可選）
 
-作者: Jimmy Cui
+版本: 1.6.0
+作者: Fubon MCP Team
 """
 
-from typing import TYPE_CHECKING
+__version__ = "1.6.0"
+__author__ = "Fubon MCP Team"
 
-if TYPE_CHECKING:
-    from typing import Any
-
-try:
-    from ._version import version as __version__
-except ImportError:
-    try:
-        from setuptools_scm import get_version
-
-        __version__ = get_version()
-    except ImportError:
-        __version__ = "unknown"
-
-__author__ = "Jimmy Cui"
-
-
-# 延遲載入以避免循環導入和 runpy 警告
-def __getattr__(name: str) -> "Any":
-    """延遲載入模組屬性以避免 python -m 執行時的警告"""
-    if name in __all__:
-        # 處理特殊的 callable 函數映射
-        callable_mapping = {
-            "callable_get_account_info": "get_account_info",
-            "callable_get_inventory": "get_inventory", 
-            "callable_get_bank_balance": "get_bank_balance",
-            "callable_get_settlement_info": "get_settlement_info",
-            "callable_get_unrealized_pnl": "get_unrealized_pnl",
-            "callable_place_order": "place_order",
-            "callable_modify_price": "modify_price",
-            "callable_modify_quantity": "modify_quantity",
-            "callable_cancel_order": "cancel_order",
-            "callable_batch_place_order": "batch_place_order",
-            "callable_get_order_results": "get_order_results",
-            "callable_get_order_reports": "get_order_reports",
-            "callable_get_order_changed_reports": "get_order_changed_reports",
-            "callable_get_filled_reports": "get_filled_reports",
-            "callable_get_event_reports": "get_event_reports",
-            "callable_get_all_reports": "get_all_reports",
-            "callable_get_realtime_quotes": "get_realtime_quotes",
-            "callable_get_intraday_tickers": "get_intraday_tickers",
-            "callable_get_intraday_ticker": "get_intraday_ticker",
-            "callable_get_intraday_quote": "get_intraday_quote",
-            "callable_get_intraday_candles": "get_intraday_candles",
-            "callable_get_intraday_trades": "get_intraday_trades",
-            "callable_get_intraday_volumes": "get_intraday_volumes",
-            "callable_get_snapshot_quotes": "get_snapshot_quotes",
-            "callable_get_snapshot_movers": "get_snapshot_movers",
-            "callable_get_snapshot_actives": "get_snapshot_actives",
-            "callable_get_historical_stats": "get_historical_stats",
-        }
-        
-        if name in callable_mapping:
-            from . import server
-            return getattr(server, callable_mapping[name])
-        elif name == "mcp":
-            from . import config
-            return config.mcp
-        elif name == "main":
-            from . import server
-            return server.main
-        else:
-            from . import server
-            return getattr(server, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
+# 匯入主要組件
+from .server import main, mcp
+from . import config
 
 # 定義包的公開介面
-__all__ = [
-    "mcp",
-    "main",
-    # Callable wrapper functions
-    "callable_get_account_info",
-    "callable_get_inventory",
-    "callable_get_bank_balance",
-    "callable_get_settlement_info",
-    "callable_get_unrealized_pnl",
-    "callable_place_order",
-    "callable_modify_price",
-    "callable_modify_quantity",
-    "callable_cancel_order",
-    "callable_batch_place_order",
-    "callable_get_order_results",
-    "callable_get_order_reports",
-    "callable_get_order_changed_reports",
-    "callable_get_filled_reports",
-    "callable_get_event_reports",
-    "callable_get_all_reports",
-    "callable_get_realtime_quotes",
-    "callable_get_intraday_tickers",
-    "callable_get_intraday_ticker",
-    "callable_get_intraday_quote",
-    "callable_get_intraday_candles",
-    "callable_get_intraday_trades",
-    "callable_get_intraday_volumes",
-    "callable_get_snapshot_quotes",
-    "callable_get_snapshot_movers",
-    "callable_get_snapshot_actives",
-    "callable_get_historical_stats",
-]
+__all__ = ["mcp", "main", "config"]

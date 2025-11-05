@@ -1,225 +1,220 @@
 """
-Tests for utils.py - Utility functions.
-
-This module tests utility functions including error handling,
-account validation, and API call helpers.
+Test utility functions from server.py.
 """
-
-import sys
-from unittest.mock import MagicMock, patch
-
 import pytest
-
-from fubon_api_mcp_server import config
-from fubon_api_mcp_server.utils import _safe_api_call, get_order_by_no, handle_exceptions, validate_and_get_account
-
-
-class TestHandleExceptions:
-    """Test exception handling decorator."""
-
-    def test_handle_exceptions_success(self):
-        """Test that decorator doesn't interfere with successful execution."""
-
-        @handle_exceptions
-        def successful_function():
-            return "success"
-
-        result = successful_function()
-        assert result == "success"
-
-    def test_handle_exceptions_with_exception(self, capsys):
-        """Test that decorator handles exceptions properly."""
-
-        @handle_exceptions
-        def failing_function():
-            raise ValueError("Test error")
-
-        # Function should not raise exception
-        failing_function()
-
-        # Check that error was printed to stderr
-        captured = capsys.readouterr()
-        assert "failing_function exception: Test error" in captured.err
-        assert "Traceback" in captured.err
-
-    def test_handle_exceptions_preserves_function_metadata(self):
-        """Test that decorator preserves function metadata."""
-
-        @handle_exceptions
-        def test_function():
-            """Test docstring."""
-            pass
-
-        assert test_function.__name__ == "test_function"
-        assert test_function.__doc__ == "Test docstring."
+from unittest.mock import Mock, patch, MagicMock
+from fubon_api_mcp_server.server import (
+    validate_and_get_account,
+    get_order_by_no,
+    _safe_api_call,
+    _find_target_order,
+    _convert_order_data_to_enums,
+    _create_order_object,
+    process_historical_data,
+    read_local_stock_data,
+    save_to_local_csv,
+)
 
 
 class TestValidateAndGetAccount:
-    """Test account validation functions."""
+    """Test validate_and_get_account function."""
 
-    def test_validate_and_get_account_success(self, mock_accounts):
+    def test_validate_and_get_account_success(self, mock_accounts, mock_server_globals):
         """Test successful account validation."""
-        config.accounts = mock_accounts
-
-        account_obj, error = validate_and_get_account("12345678")
-
+        account_obj, error = validate_and_get_account("123456")
         assert account_obj is not None
         assert error is None
-        assert account_obj.account == "12345678"
+        assert account_obj.account == "123456"
 
-    def test_validate_and_get_account_no_accounts(self):
-        """Test account validation when no accounts available."""
-        config.accounts = None
-
-        account_obj, error = validate_and_get_account("12345678")
-
+    def test_validate_and_get_account_not_found(self, mock_accounts, mock_server_globals):
+        """Test account not found."""
+        account_obj, error = validate_and_get_account("999999")
         assert account_obj is None
-        assert error == "Account authentication failed, please check if credentials have expired"
+        assert error == "找不到帳戶 999999"
 
-    def test_validate_and_get_account_failed_auth(self):
-        """Test account validation when authentication failed."""
-        mock_failed_accounts = MagicMock()
-        mock_failed_accounts.is_success = False
-        config.accounts = mock_failed_accounts
-
-        account_obj, error = validate_and_get_account("12345678")
-
-        assert account_obj is None
-        assert error == "Account authentication failed, please check if credentials have expired"
-
-    def test_validate_and_get_account_not_found(self, mock_accounts):
-        """Test account validation when account not found."""
-        config.accounts = mock_accounts
-
-        account_obj, error = validate_and_get_account("99999999")
-
-        assert account_obj is None
-        assert error == "account 99999999 not found"
+    def test_validate_and_get_account_auth_failed(self, mock_server_globals):
+        """Test authentication failure."""
+        with patch('fubon_api_mcp_server.server.accounts', None):
+            account_obj, error = validate_and_get_account("123456")
+            assert account_obj is None
+            assert "帳戶認證失敗" in error
 
 
 class TestGetOrderByNo:
-    """Test order retrieval functions."""
+    """Test get_order_by_no function."""
 
-    def test_get_order_by_no_success(self, mock_sdk):
+    def test_get_order_by_no_success(self, mock_accounts, mock_sdk, mock_server_globals):
         """Test successful order retrieval."""
-        config.sdk = mock_sdk
+        mock_order = Mock()
+        mock_order.order_no = "12345"
 
-        # Mock order results
-        mock_order_results = MagicMock()
-        mock_order_results.is_success = True
-        mock_order_results.data = [MagicMock(order_no="12345", symbol="2330"), MagicMock(order_no="67890", symbol="2454")]
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = [mock_order]
 
-        mock_sdk.stock.get_order_results.return_value = mock_order_results
+        mock_sdk.stock.get_order_results.return_value = mock_result
 
-        order_obj, error = get_order_by_no(MagicMock(), "12345")
-
+        order_obj, error = get_order_by_no(mock_accounts.data[0], "12345")
         assert order_obj is not None
         assert error is None
         assert order_obj.order_no == "12345"
 
-    def test_get_order_by_no_sdk_not_initialized(self):
-        """Test order retrieval when SDK not initialized."""
-        config.sdk = None
+    def test_get_order_by_no_not_found(self, mock_accounts, mock_sdk, mock_server_globals):
+        """Test order not found."""
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = []
 
-        order_obj, error = get_order_by_no(MagicMock(), "12345")
+        mock_sdk.stock.get_order_results.return_value = mock_result
 
+        order_obj, error = get_order_by_no(mock_accounts.data[0], "99999")
         assert order_obj is None
-        assert error == "SDK not initialized or stock module not available"
-
-    def test_get_order_by_no_api_failure(self, mock_sdk):
-        """Test order retrieval when API call fails."""
-        config.sdk = mock_sdk
-
-        mock_sdk.stock.get_order_results.side_effect = Exception("API Error")
-
-        order_obj, error = get_order_by_no(MagicMock(), "12345")
-
-        assert order_obj is None
-        assert "Error getting order results: API Error" in error
-
-    def test_get_order_by_no_not_found(self, mock_sdk):
-        """Test order retrieval when order not found."""
-        config.sdk = mock_sdk
-
-        # Clear any side effects from previous tests
-        mock_sdk.stock.get_order_results.side_effect = None
-
-        mock_order_results = MagicMock()
-        mock_order_results.is_success = True
-        mock_order_results.data = [MagicMock(order_no="12345", symbol="2330")]
-
-        mock_sdk.stock.get_order_results.return_value = mock_order_results
-
-        order_obj, error = get_order_by_no(MagicMock(), "99999")
-
-        assert order_obj is None
-        assert error == "Order number 99999 not found"
+        assert error == "找不到委託單號 99999"
 
 
 class TestSafeApiCall:
-    """Test safe API call helper."""
+    """Test _safe_api_call function."""
 
-    def test_safe_api_call_success(self):
+    def test_safe_api_call_success(self, mock_sdk):
         """Test successful API call."""
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = {"test": "data"}
 
-        def mock_api():
-            result = MagicMock()
-            result.is_success = True
-            result.data = {"key": "value"}
-            return result
+        def mock_api_func():
+            return mock_result
 
-        data = _safe_api_call(mock_api, "Test API")
+        result = _safe_api_call(mock_api_func, "Test error")
+        assert result == {"test": "data"}
 
-        assert data == {"key": "value"}
-
-    def test_safe_api_call_failure(self):
+    def test_safe_api_call_failure(self, mock_sdk):
         """Test failed API call."""
+        def mock_api_func():
+            raise Exception("API error")
 
-        def mock_api():
-            result = MagicMock()
-            result.is_success = False
-            return result
-
-        data = _safe_api_call(mock_api, "Test API")
-
-        assert data is None
-
-    def test_safe_api_call_exception(self):
-        """Test API call with exception."""
-
-        def mock_api():
-            raise Exception("Test exception")
-
-        data = _safe_api_call(mock_api, "Test API")
-
-        assert data == "Test API: Test exception"
+        result = _safe_api_call(mock_api_func, "Test error")
+        assert result == "Test error: API error"
 
 
-class TestUtilsIntegration:
-    """Test utility functions integration."""
+class TestFindTargetOrder:
+    """Test _find_target_order function."""
 
-    def test_all_utils_functions_importable(self):
-        """Test that all utility functions can be imported."""
-        from fubon_api_mcp_server.utils import (
-            _safe_api_call,
-            get_order_by_no,
-            handle_exceptions,
-            validate_and_get_account,
-        )
+    def test_find_target_order_success(self):
+        """Test successful order finding."""
+        mock_order = Mock()
+        mock_order.order_no = "12345"
 
-        # Test that functions are callable
-        assert callable(handle_exceptions)
-        assert callable(validate_and_get_account)
-        assert callable(get_order_by_no)
-        assert callable(_safe_api_call)
+        mock_result = Mock()
+        mock_result.data = [mock_order]
 
-    def test_utils_module_structure(self):
-        """Test utils module has expected structure."""
-        import fubon_api_mcp_server.utils as utils_module
+        order = _find_target_order(mock_result, "12345")
+        assert order is not None
+        assert order.order_no == "12345"
 
-        # Check for expected functions
-        expected_functions = ["handle_exceptions", "validate_and_get_account", "get_order_by_no", "_safe_api_call"]
+    def test_find_target_order_not_found(self):
+        """Test order not found."""
+        mock_result = Mock()
+        mock_result.data = []
 
-        for func_name in expected_functions:
-            assert hasattr(utils_module, func_name), f"Utils module missing function: {func_name}"
-            assert callable(getattr(utils_module, func_name)), f"{func_name} is not callable"
+        order = _find_target_order(mock_result, "99999")
+        assert order is None
+
+
+class TestConvertOrderDataToEnums:
+    """Test _convert_order_data_to_enums function."""
+
+    def test_convert_order_data_to_enums(self):
+        """Test enum conversion."""
+        order_data = {
+            "buy_sell": "Buy",
+            "market_type": "Common",
+            "price_type": "Limit",
+            "time_in_force": "ROD",
+            "order_type": "Stock"
+        }
+
+        enums = _convert_order_data_to_enums(order_data)
+        assert enums["buy_sell"] is not None
+        assert enums["market_type"] is not None
+        assert enums["price_type"] is not None
+        assert enums["time_in_force"] is not None
+        assert enums["order_type"] is not None
+
+
+class TestCreateOrderObject:
+    """Test _create_order_object function."""
+
+    def test_create_order_object(self):
+        """Test order object creation."""
+        order_data = {
+            "symbol": "2330",
+            "quantity": 1000,
+            "price": 500.0,
+            "user_def": "test"
+        }
+
+        # Use real enums instead of mocks
+        from fubon_neo.constant import BSAction, MarketType, OrderType, PriceType, TimeInForce
+
+        enums = {
+            "buy_sell": BSAction.Buy,
+            "market_type": MarketType.Common,
+            "price_type": PriceType.Limit,
+            "time_in_force": TimeInForce.ROD,
+            "order_type": OrderType.Stock
+        }
+
+        order = _create_order_object(order_data, enums)
+        assert order is not None
+
+
+class TestProcessHistoricalData:
+    """Test process_historical_data function."""
+
+    def test_process_historical_data(self, sample_historical_data):
+        """Test historical data processing."""
+        processed = process_historical_data(sample_historical_data)
+        assert 'vol_value' in processed.columns
+        assert 'price_change' in processed.columns
+        assert 'change_ratio' in processed.columns
+
+
+class TestReadLocalStockData:
+    """Test read_local_stock_data function."""
+
+    def test_read_local_stock_data_not_exists(self):
+        """Test reading non-existent file."""
+        result = read_local_stock_data("NONEXISTENT")
+        assert result is None
+
+    @patch('pathlib.Path.exists')
+    @patch('pandas.read_csv')
+    def test_read_local_stock_data_exists(self, mock_read_csv, mock_exists):
+        """Test reading existing file."""
+        import pandas as pd
+
+        mock_exists.return_value = True
+        mock_df = pd.DataFrame({'date': ['2023-01-01'], 'close': [100]})
+        mock_read_csv.return_value = mock_df
+
+        result = read_local_stock_data("2330")
+        assert result is not None
+
+
+class TestSaveToLocalCsv:
+    """Test save_to_local_csv function."""
+
+    @patch('os.path.exists')
+    @patch('pandas.DataFrame.to_csv')
+    @patch('shutil.move')
+    def test_save_to_local_csv(self, mock_move, mock_to_csv, mock_exists):
+        """Test saving CSV data."""
+        import pandas as pd
+
+        mock_exists.return_value = False
+
+        test_data = [{'date': '2023-01-01', 'close': 100}]
+        save_to_local_csv("2330", test_data)
+
+        mock_to_csv.assert_called_once()
+        mock_move.assert_called_once()

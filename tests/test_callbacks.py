@@ -1,289 +1,192 @@
 """
-Tests for callbacks module.
+Tests for callback functions.
 """
 
-import sys
-from datetime import datetime
-from unittest.mock import MagicMock, patch
-
 import pytest
-
-from fubon_api_mcp_server.callbacks import (
-    latest_event_reports,
-    latest_filled_reports,
-    latest_order_changed_reports,
-    latest_order_reports,
-    on_event,
-    on_filled,
+from unittest.mock import Mock, patch
+from fubon_api_mcp_server.server import (
     on_order,
     on_order_changed,
-    relogin_lock,
+    on_filled,
+    on_event,
 )
 
-# =============================================================================
-# Callback Function Tests
-# =============================================================================
 
+class TestCallbacks:
+    """Test callback functions."""
 
-def test_on_order_basic():
-    """Test on_order callback with valid data"""
-    # Clear existing reports
-    latest_order_reports.clear()
+    @patch('fubon_api_mcp_server.server.latest_order_reports')
+    def test_on_order(self, mock_reports):
+        """Test on_order callback."""
+        mock_reports.__iter__ = lambda: iter([])
+        mock_reports.append = Mock()
+        mock_reports.__len__ = lambda: 0
+
+        test_data = {"order_no": "12345", "symbol": "2330"}
 
-    # Create mock order data
-    mock_order = MagicMock()
-    mock_order.order_no = "12345"
-    mock_order.symbol = "2330"
+        on_order(test_data)
 
-    # Call callback
-    on_order(mock_order)
+        mock_reports.append.assert_called_once()
+        args = mock_reports.append.call_args[0][0]
+        assert args["data"] == test_data
+        assert "timestamp" in args
 
-    # Verify report was added
-    assert len(latest_order_reports) == 1
-    assert latest_order_reports[0]["data"] == mock_order
-    assert "timestamp" in latest_order_reports[0]
+    @patch('fubon_api_mcp_server.server.latest_order_changed_reports')
+    def test_on_order_changed(self, mock_reports):
+        """Test on_order_changed callback."""
+        mock_reports.__iter__ = lambda: iter([])
+        mock_reports.append = Mock()
+        mock_reports.__len__ = lambda: 0
+
+        test_data = {"order_no": "12345", "new_price": 505.0}
 
+        on_order_changed(test_data)
 
-def test_on_order_multiple_reports():
-    """Test on_order callback with multiple reports"""
-    latest_order_reports.clear()
+        mock_reports.append.assert_called_once()
+        args = mock_reports.append.call_args[0][0]
+        assert args["data"] == test_data
+        assert "timestamp" in args
 
-    # Add 15 reports (should keep only last 10)
-    for i in range(15):
-        mock_order = MagicMock()
-        mock_order.order_no = f"ORDER{i}"
-        on_order(mock_order)
+    @patch('fubon_api_mcp_server.server.latest_filled_reports')
+    def test_on_filled(self, mock_reports):
+        """Test on_filled callback."""
+        mock_reports.__iter__ = lambda: iter([])
+        mock_reports.append = Mock()
+        mock_reports.__len__ = lambda: 0
+
+        test_data = {"order_no": "12345", "filled_qty": 100}
 
-    # Should only have 10 reports
-    assert len(latest_order_reports) == 10
-    # Should have the last 10 (5-14)
-    assert latest_order_reports[0]["data"].order_no == "ORDER5"
-    assert latest_order_reports[-1]["data"].order_no == "ORDER14"
+        on_filled(test_data)
+
+        mock_reports.append.assert_called_once()
+        args = mock_reports.append.call_args[0][0]
+        assert args["data"] == test_data
+        assert "timestamp" in args
+
+    @patch('fubon_api_mcp_server.server.latest_event_reports')
+    def test_on_event(self, mock_reports):
+        """Test on_event callback."""
+        mock_reports.__iter__ = lambda: iter([])
+        mock_reports.append = Mock()
+        mock_reports.__len__ = lambda: 0
 
+        test_data = {"event_type": "market_open", "message": "Market opened"}
 
-def test_on_order_exception_handling():
-    """Test on_order callback with exception"""
-    latest_order_reports.clear()
+        on_event(test_data)
+
+        mock_reports.append.assert_called_once()
+        args = mock_reports.append.call_args[0][0]
+        assert args["data"] == test_data
+        assert "timestamp" in args
 
-    # This should not raise exception
-    with patch("sys.stderr"):
-        on_order(None)
+    @patch('fubon_api_mcp_server.server.latest_order_reports')
+    def test_on_order_limit_reports(self, mock_reports):
+        """Test that on_order limits reports to 10."""
+        # Initialize with 11 items to test limiting
+        mock_reports.__iter__ = lambda self: iter([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+        mock_reports.__len__ = Mock(return_value=11)
+        mock_reports.append = Mock()
+        mock_reports.pop = Mock()
 
-    # List should still be empty or handle gracefully
-    # The function prints error but doesn't add to list on exception
+        test_data = {"order_no": "12346", "symbol": "2454"}
 
+        on_order(test_data)
 
-def test_on_order_changed_basic():
-    """Test on_order_changed callback with valid data"""
-    latest_order_changed_reports.clear()
+        # Should maintain only 10 most recent reports
+        mock_reports.append.assert_called_once()
+        mock_reports.pop.assert_called_once()
 
-    mock_change = MagicMock()
-    mock_change.order_no = "12345"
-    mock_change.change_type = "PRICE"
+    @patch('fubon_api_mcp_server.server.latest_order_changed_reports')
+    def test_on_order_changed_limit_reports(self, mock_reports):
+        """Test that on_order_changed limits reports to 10."""
+        # Initialize with 11 items to test limiting
+        mock_reports.__iter__ = lambda self: iter([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+        mock_reports.__len__ = Mock(return_value=11)
+        mock_reports.append = Mock()
+        mock_reports.pop = Mock()
 
-    on_order_changed(mock_change)
+        test_data = {"order_no": "12345", "new_quantity": 1500}
 
-    assert len(latest_order_changed_reports) == 1
-    assert latest_order_changed_reports[0]["data"] == mock_change
-    assert "timestamp" in latest_order_changed_reports[0]
+        on_order_changed(test_data)
 
+        mock_reports.append.assert_called_once()
+        mock_reports.pop.assert_called_once()
 
-def test_on_order_changed_limit():
-    """Test on_order_changed maintains max 10 reports"""
-    latest_order_changed_reports.clear()
+    @patch('fubon_api_mcp_server.server.latest_filled_reports')
+    def test_on_filled_limit_reports(self, mock_reports):
+        """Test that on_filled limits reports to 10."""
+        # Initialize with 11 items to test limiting
+        mock_reports.__iter__ = lambda self: iter([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+        mock_reports.__len__ = Mock(return_value=11)
+        mock_reports.append = Mock()
+        mock_reports.pop = Mock()
 
-    for i in range(12):
-        mock_change = MagicMock()
-        mock_change.order_no = f"CHANGE{i}"
-        on_order_changed(mock_change)
+        test_data = {"order_no": "12345", "filled_price": 500.0}
 
-    assert len(latest_order_changed_reports) == 10
-    assert latest_order_changed_reports[0]["data"].order_no == "CHANGE2"
+        on_filled(test_data)
 
+        mock_reports.append.assert_called_once()
+        mock_reports.pop.assert_called_once()
 
-def test_on_filled_basic():
-    """Test on_filled callback with valid data"""
-    latest_filled_reports.clear()
+    @patch('fubon_api_mcp_server.server.latest_event_reports')
+    def test_on_event_limit_reports(self, mock_reports):
+        """Test that on_event limits reports to 10."""
+        # Initialize with 11 items to test limiting
+        mock_reports.__iter__ = lambda self: iter([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+        mock_reports.__len__ = Mock(return_value=11)
+        mock_reports.append = Mock()
+        mock_reports.pop = Mock()
 
-    mock_filled = MagicMock()
-    mock_filled.order_no = "12345"
-    mock_filled.filled_qty = 1000
-    mock_filled.filled_price = 550.0
+        test_data = {"event_type": "disconnected"}
 
-    on_filled(mock_filled)
+        on_event(test_data)
 
-    assert len(latest_filled_reports) == 1
-    assert latest_filled_reports[0]["data"] == mock_filled
-    assert "timestamp" in latest_filled_reports[0]
+        mock_reports.append.assert_called_once()
+        mock_reports.pop.assert_called_once()
 
+    @patch('fubon_api_mcp_server.server.print')
+    def test_on_order_with_exception(self, mock_print):
+        """Test on_order handles exceptions gracefully."""
+        # This will test the exception handling in the callback
+        # Since latest_order_reports is patched to a list that might not support append
+        with patch('fubon_api_mcp_server.server.latest_order_reports', Mock()) as mock_reports:
+            mock_reports.append.side_effect = Exception("Test exception")
 
-def test_on_filled_limit():
-    """Test on_filled maintains max 10 reports"""
-    latest_filled_reports.clear()
+            test_data = {"order_no": "12345"}
+            on_order(test_data)
 
-    for i in range(15):
-        mock_filled = MagicMock()
-        mock_filled.order_no = f"FILLED{i}"
-        on_filled(mock_filled)
+            # Should not raise exception, just print error
+            mock_print.assert_called()
 
-    assert len(latest_filled_reports) == 10
-    assert latest_filled_reports[0]["data"].order_no == "FILLED5"
+    @patch('fubon_api_mcp_server.server.print')
+    def test_on_order_changed_with_exception(self, mock_print):
+        """Test on_order_changed handles exceptions gracefully."""
+        with patch('fubon_api_mcp_server.server.latest_order_changed_reports', Mock()) as mock_reports:
+            mock_reports.append.side_effect = Exception("Test exception")
 
+            test_data = {"order_no": "12345"}
+            on_order_changed(test_data)
 
-def test_on_event_basic():
-    """Test on_event callback with valid data"""
-    latest_event_reports.clear()
+            mock_print.assert_called()
 
-    mock_event = MagicMock()
-    mock_event.event_type = "CONNECTION"
-    mock_event.message = "Connected to server"
+    @patch('fubon_api_mcp_server.server.print')
+    def test_on_filled_with_exception(self, mock_print):
+        """Test on_filled handles exceptions gracefully."""
+        with patch('fubon_api_mcp_server.server.latest_filled_reports', Mock()) as mock_reports:
+            mock_reports.append.side_effect = Exception("Test exception")
 
-    on_event(mock_event)
+            test_data = {"order_no": "12345"}
+            on_filled(test_data)
 
-    assert len(latest_event_reports) == 1
-    assert latest_event_reports[0]["data"] == mock_event
-    assert "timestamp" in latest_event_reports[0]
+            mock_print.assert_called()
 
+    @patch('fubon_api_mcp_server.server.print')
+    def test_on_event_with_exception(self, mock_print):
+        """Test on_event handles exceptions gracefully."""
+        with patch('fubon_api_mcp_server.server.latest_event_reports', Mock()) as mock_reports:
+            mock_reports.append.side_effect = Exception("Test exception")
 
-def test_on_event_limit():
-    """Test on_event maintains max 10 reports"""
-    latest_event_reports.clear()
+            test_data = {"event_type": "error"}
+            on_event(test_data)
 
-    for i in range(20):
-        mock_event = MagicMock()
-        mock_event.event_type = f"EVENT{i}"
-        on_event(mock_event)
-
-    assert len(latest_event_reports) == 10
-    assert latest_event_reports[0]["data"].event_type == "EVENT10"
-
-
-def test_on_event_exception_handling():
-    """Test on_event callback with exception"""
-    latest_event_reports.clear()
-
-    with patch("sys.stderr"):
-        on_event(None)
-
-    # Should handle gracefully without crashing
-
-
-def test_timestamp_format():
-    """Test that timestamps are in ISO format"""
-    latest_order_reports.clear()
-
-    mock_order = MagicMock()
-    on_order(mock_order)
-
-    timestamp_str = latest_order_reports[0]["timestamp"]
-    # Should be able to parse as datetime
-    parsed = datetime.fromisoformat(timestamp_str)
-    assert isinstance(parsed, datetime)
-
-
-def test_relogin_lock_exists():
-    """Test that relogin_lock is a threading.Lock"""
-    import threading
-
-    assert isinstance(relogin_lock, type(threading.Lock()))
-
-
-def test_callbacks_thread_safety():
-    """Test that callbacks can be called concurrently"""
-    import threading
-
-    latest_order_reports.clear()
-
-    def add_orders():
-        for i in range(5):
-            mock_order = MagicMock()
-            mock_order.order_no = f"ORDER{i}"
-            on_order(mock_order)
-
-    threads = [threading.Thread(target=add_orders) for _ in range(3)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    # Should have at most 10 reports (limit enforced)
-    assert len(latest_order_reports) <= 10
-
-
-def test_all_callbacks_clear_state():
-    """Test clearing all report lists"""
-    latest_order_reports.clear()
-    latest_order_changed_reports.clear()
-    latest_filled_reports.clear()
-    latest_event_reports.clear()
-
-    assert len(latest_order_reports) == 0
-    assert len(latest_order_changed_reports) == 0
-    assert len(latest_filled_reports) == 0
-    assert len(latest_event_reports) == 0
-
-
-def test_callback_data_structure():
-    """Test that callback data has correct structure"""
-    latest_order_reports.clear()
-
-    mock_order = MagicMock()
-    mock_order.order_no = "TEST123"
-
-    on_order(mock_order)
-
-    report = latest_order_reports[0]
-    assert isinstance(report, dict)
-    assert "timestamp" in report
-    assert "data" in report
-    assert report["data"].order_no == "TEST123"
-
-
-@patch("sys.stderr")
-def test_on_order_prints_to_stderr(mock_stderr):
-    """Test that on_order prints to stderr"""
-    latest_order_reports.clear()
-
-    mock_order = MagicMock()
-    mock_order.__str__ = lambda self: "TEST_ORDER"
-
-    with patch("builtins.print") as mock_print:
-        on_order(mock_order)
-        # Verify print was called with correct arguments
-        assert mock_print.called
-
-
-@patch("sys.stderr")
-def test_on_order_changed_prints_to_stderr(mock_stderr):
-    """Test that on_order_changed prints to stderr"""
-    latest_order_changed_reports.clear()
-
-    mock_change = MagicMock()
-
-    with patch("builtins.print") as mock_print:
-        on_order_changed(mock_change)
-        assert mock_print.called
-
-
-@patch("sys.stderr")
-def test_on_filled_prints_to_stderr(mock_stderr):
-    """Test that on_filled prints to stderr"""
-    latest_filled_reports.clear()
-
-    mock_filled = MagicMock()
-
-    with patch("builtins.print") as mock_print:
-        on_filled(mock_filled)
-        assert mock_print.called
-
-
-@patch("sys.stderr")
-def test_on_event_prints_to_stderr(mock_stderr):
-    """Test that on_event prints to stderr"""
-    latest_event_reports.clear()
-
-    mock_event = MagicMock()
-
-    with patch("builtins.print") as mock_print:
-        on_event(mock_event)
-        assert mock_print.called
+            mock_print.assert_called()

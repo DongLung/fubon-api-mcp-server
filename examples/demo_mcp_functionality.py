@@ -71,10 +71,10 @@ async def test_account_info():
     print("="*60)
     
     try:
-        from fubon_api_mcp_server.account_service import get_account_info
+        from fubon_api_mcp_server.server import callable_get_account_info
         
         # Call the function wrapper (MCP tool) with empty args dict
-        result = get_account_info.fn({})
+        result = callable_get_account_info({})
         print("✅ 成功取得帳戶資訊")
         print(f"   狀態: {result.get('status')}")
         print(f"   訊息: {result.get('message')}")
@@ -103,14 +103,14 @@ async def test_inventory():
     print("="*60)
     
     try:
-        from fubon_api_mcp_server.account_service import get_inventory
+        from fubon_api_mcp_server.server import callable_get_inventory
         
         if not config.accounts or not hasattr(config.accounts, 'data') or not config.accounts.data:
             print("⚠️  無可用帳戶，跳過測試")
             return True
         
         account_id = config.accounts.data[0].account
-        result = get_inventory.fn({"account": account_id})
+        result = callable_get_inventory({"account": account_id})
         print("✅ 成功取得庫存資訊")
         print(f"   狀態: {result.get('status')}")
         print(f"   訊息: {result.get('message')}")
@@ -146,10 +146,10 @@ async def test_market_data():
     print("="*60)
     
     try:
-        from fubon_api_mcp_server.market_data_service import get_intraday_quote
+        from fubon_api_mcp_server.server import callable_get_intraday_quote
         
         # Test with a common stock (台積電 2330)
-        result = get_intraday_quote.fn({"symbol": "2330"})
+        result = callable_get_intraday_quote({"symbol": "2330"})
         print("✅ 成功取得市場報價 (2330)")
         print(f"   狀態: {result.get('status')}")
         

@@ -1,299 +1,215 @@
 """
-Tests for market_data_service.py - Market data services.
-
-This module tests market data related MCP tools including quotes,
-tickers, candles, and market statistics.
+Tests for market data service functions in server.py.
 """
 
-from unittest.mock import MagicMock
-
 import pytest
-
-from fubon_api_mcp_server import config
-from fubon_api_mcp_server.market_data_service import (
-    get_historical_stats,
-    get_intraday_candles,
-    get_intraday_quote,
-    get_intraday_ticker,
+from unittest.mock import Mock, patch, MagicMock
+from fubon_api_mcp_server.server import (
+    get_realtime_quotes,
     get_intraday_tickers,
+    get_intraday_ticker,
+    get_intraday_quote,
+    get_intraday_candles,
     get_intraday_trades,
     get_intraday_volumes,
-    get_realtime_quotes,
-    get_snapshot_actives,
-    get_snapshot_movers,
     get_snapshot_quotes,
+    get_snapshot_movers,
+    get_snapshot_actives,
+    get_historical_stats,
 )
 
 
-class TestMarketDataServices:
-    """Test market data service functions."""
+class TestGetRealtimeQuotes:
+    """Test get_realtime_quotes function."""
 
-    def test_get_intraday_tickers_success(self, mock_reststock):
-        """Test successful intraday tickers retrieval."""
-        config.reststock = mock_reststock
+    def test_get_realtime_quotes_success(self, mock_server_globals, mock_sdk):
+        """Test get_realtime_quotes success."""
+        mock_sdk.marketdata.realtime.quote.return_value = {"price": 500.0}
 
-        # Mock API response
-        mock_result = [{"symbol": "2330", "price": 500.0}, {"symbol": "2454", "price": 1000.0}]
-        mock_reststock.intraday.tickers.return_value = mock_result
-
-        result = (
-            get_intraday_tickers.fn({"market": "TSE"})
-            if hasattr(get_intraday_tickers, "fn")
-            else get_intraday_tickers({"market": "TSE"})
-        )
+        result = get_realtime_quotes({"symbol": "2330"})
 
         assert result["status"] == "success"
-        assert len(result["data"]) == 2
-        assert result["data"][0]["symbol"] == "2330"
-        mock_reststock.intraday.tickers.assert_called_once_with(market="TSE")
+        assert result["data"] == {"price": 500.0}
+        assert "成功獲取 2330 即時行情" in result["message"]
 
-    def test_get_intraday_ticker_success(self, mock_reststock):
-        """Test successful intraday ticker retrieval."""
-        config.reststock = mock_reststock
+    def test_get_realtime_quotes_exception(self, mock_server_globals, mock_sdk):
+        """Test get_realtime_quotes with exception."""
+        mock_sdk.marketdata.realtime.quote.side_effect = Exception("API error")
 
-        mock_result = {"symbol": "2330", "price": 500.0, "volume": 1000000}
-        mock_reststock.intraday.ticker.return_value = mock_result
-
-        result = (
-            get_intraday_ticker.fn({"symbol": "2330"})
-            if hasattr(get_intraday_ticker, "fn")
-            else get_intraday_ticker({"symbol": "2330"})
-        )
-
-        assert result["status"] == "success"
-        assert result["data"]["symbol"] == "2330"
-        mock_reststock.intraday.ticker.assert_called_once_with("2330")
-
-    def test_get_intraday_quote_success(self, mock_reststock):
-        """Test successful intraday quote retrieval."""
-        config.reststock = mock_reststock
-
-        mock_result = {"symbol": "2330", "price": 500.0, "change": 5.0, "change_percent": 1.0}
-        mock_reststock.intraday.quote.return_value = mock_result
-
-        result = (
-            get_intraday_quote.fn({"symbol": "2330"})
-            if hasattr(get_intraday_quote, "fn")
-            else get_intraday_quote({"symbol": "2330"})
-        )
-
-        assert result["status"] == "success"
-        assert result["data"]["price"] == 500.0
-        mock_reststock.intraday.quote.assert_called_once_with(symbol="2330")
-
-    def test_get_intraday_candles_success(self, mock_reststock):
-        """Test successful intraday candles retrieval."""
-        config.reststock = mock_reststock
-
-        mock_result = [
-            {"time": "09:00", "open": 495.0, "high": 505.0, "low": 490.0, "close": 500.0},
-            {"time": "09:01", "open": 500.0, "high": 510.0, "low": 495.0, "close": 505.0},
-        ]
-        mock_reststock.intraday.candles.return_value = mock_result
-
-        result = (
-            get_intraday_candles.fn({"symbol": "2330"})
-            if hasattr(get_intraday_candles, "fn")
-            else get_intraday_candles({"symbol": "2330"})
-        )
-
-        assert result["status"] == "success"
-        assert len(result["data"]) == 2
-        mock_reststock.intraday.candles.assert_called_once_with("2330")
-
-    def test_get_intraday_trades_success(self, mock_reststock):
-        """Test successful intraday trades retrieval."""
-        config.reststock = mock_reststock
-
-        mock_result = [
-            {"time": "09:00:01", "price": 500.0, "volume": 100},
-            {"time": "09:00:02", "price": 501.0, "volume": 200},
-        ]
-        mock_reststock.intraday.trades.return_value = mock_result
-
-        result = (
-            get_intraday_trades.fn({"symbol": "2330"})
-            if hasattr(get_intraday_trades, "fn")
-            else get_intraday_trades({"symbol": "2330"})
-        )
-
-        assert result["status"] == "success"
-        assert len(result["data"]) == 2
-        mock_reststock.intraday.trades.assert_called_once_with("2330")
-
-    def test_get_intraday_volumes_success(self, mock_reststock):
-        """Test successful intraday volumes retrieval."""
-        config.reststock = mock_reststock
-
-        mock_result = [{"time": "09:00", "volume": 10000}, {"time": "09:01", "volume": 15000}]
-        mock_reststock.intraday.volumes.return_value = mock_result
-
-        result = (
-            get_intraday_volumes.fn({"symbol": "2330"})
-            if hasattr(get_intraday_volumes, "fn")
-            else get_intraday_volumes({"symbol": "2330"})
-        )
-
-        assert result["status"] == "success"
-        assert len(result["data"]) == 2
-        mock_reststock.intraday.volumes.assert_called_once_with("2330")
-
-    def test_get_snapshot_quotes_success(self, mock_reststock):
-        """Test successful snapshot quotes retrieval."""
-        config.reststock = mock_reststock
-
-        mock_result = [{"symbol": "2330", "price": 500.0, "change": 5.0}, {"symbol": "2454", "price": 1000.0, "change": -10.0}]
-        mock_reststock.snapshot.quotes.return_value = mock_result
-
-        result = (
-            get_snapshot_quotes.fn({"market": "TSE"})
-            if hasattr(get_snapshot_quotes, "fn")
-            else get_snapshot_quotes({"market": "TSE"})
-        )
-
-        assert result["status"] == "success"
-        assert len(result["data"]) == 2
-        mock_reststock.snapshot.quotes.assert_called_once_with("TSE")
-
-    def test_get_snapshot_movers_success(self, mock_reststock):
-        """Test successful snapshot movers retrieval."""
-        config.reststock = mock_reststock
-
-        mock_result = [{"symbol": "2330", "change_percent": 5.0}, {"symbol": "2454", "change_percent": -3.0}]
-        mock_reststock.snapshot.movers.return_value = mock_result
-
-        result = (
-            get_snapshot_movers.fn({"market": "TSE"})
-            if hasattr(get_snapshot_movers, "fn")
-            else get_snapshot_movers({"market": "TSE"})
-        )
-
-        assert result["status"] == "success"
-        assert len(result["data"]) == 2
-        mock_reststock.snapshot.movers.assert_called_once_with("TSE")
-
-    def test_get_snapshot_actives_success(self, mock_reststock):
-        """Test successful snapshot actives retrieval."""
-        config.reststock = mock_reststock
-
-        mock_result = [{"symbol": "2330", "volume": 1000000}, {"symbol": "2454", "volume": 500000}]
-        mock_reststock.snapshot.actives.return_value = mock_result
-
-        result = (
-            get_snapshot_actives.fn({"market": "TSE"})
-            if hasattr(get_snapshot_actives, "fn")
-            else get_snapshot_actives({"market": "TSE"})
-        )
-
-        assert result["status"] == "success"
-        assert len(result["data"]) == 2
-        mock_reststock.snapshot.actives.assert_called_once_with(market="TSE", trade="volume")
-
-    def test_get_historical_stats_success(self, mock_reststock):
-        """Test successful historical stats retrieval."""
-        config.reststock = mock_reststock
-
-        mock_result = {"symbol": "2330", "high_52w": 600.0, "low_52w": 400.0, "avg_volume": 1000000}
-        mock_reststock.historical.stats.return_value = mock_result
-
-        result = (
-            get_historical_stats.fn({"symbol": "2330"})
-            if hasattr(get_historical_stats, "fn")
-            else get_historical_stats({"symbol": "2330"})
-        )
-
-        assert result["status"] == "success"
-        assert result["data"]["high_52w"] == 600.0
-        mock_reststock.historical.stats.assert_called_once_with("2330")
-
-    def test_get_realtime_quotes_success(self, mock_sdk):
-        """Test successful realtime quotes retrieval."""
-        config.sdk = mock_sdk
-
-        mock_result = {"symbol": "2330", "price": 500.0, "bid": 499.0, "ask": 501.0}
-        mock_sdk.marketdata.realtime.quote.return_value = mock_result
-
-        result = (
-            get_realtime_quotes.fn({"symbol": "2330"})
-            if hasattr(get_realtime_quotes, "fn")
-            else get_realtime_quotes({"symbol": "2330"})
-        )
-
-        assert result["status"] == "success"
-        assert result["data"]["price"] == 500.0
-        mock_sdk.marketdata.realtime.quote.assert_called_once_with("2330")
-
-    def test_market_data_api_failure(self, mock_reststock):
-        """Test market data API failure handling."""
-        config.reststock = mock_reststock
-
-        mock_reststock.intraday.ticker.side_effect = Exception("API Error")
-
-        result = (
-            get_intraday_ticker.fn({"symbol": "2330"})
-            if hasattr(get_intraday_ticker, "fn")
-            else get_intraday_ticker({"symbol": "2330"})
-        )
+        result = get_realtime_quotes({"symbol": "2330"})
 
         assert result["status"] == "error"
-        assert "API Error" in result["message"]
+        assert "獲取即時行情失敗" in result["message"]
 
-    def test_market_data_no_reststock(self):
-        """Test market data when reststock is not initialized."""
-        config.reststock = None
 
-        result = (
-            get_intraday_ticker.fn({"symbol": "2330"})
-            if hasattr(get_intraday_ticker, "fn")
-            else get_intraday_ticker({"symbol": "2330"})
-        )
+class TestGetIntradayTickers:
+    """Test get_intraday_tickers function."""
+
+    def test_get_intraday_tickers_success(self, mock_server_globals, mock_sdk):
+        """Test get_intraday_tickers success."""
+        mock_sdk.marketdata.rest_client.stock.intraday.tickers.return_value = [{"symbol": "2330", "name": "台積電"}]
+
+        result = get_intraday_tickers({"market": "TSE"})
+
+        assert result["status"] == "success"
+        assert result["data"] == [{"symbol": "2330", "name": "台積電"}]
+        assert "成功獲取 TSE 市場股票列表" in result["message"]
+
+    def test_get_intraday_tickers_exception(self, mock_server_globals, mock_sdk):
+        """Test get_intraday_tickers with exception."""
+        mock_sdk.marketdata.rest_client.stock.intraday.tickers.side_effect = Exception("API error")
+
+        result = get_intraday_tickers({"market": "TSE"})
 
         assert result["status"] == "error"
-        assert "REST client not initialized" in result["message"]
+        assert "獲取股票列表失敗" in result["message"]
 
 
-class TestMarketDataServiceIntegration:
-    """Test market data service integration."""
+class TestGetIntradayTicker:
+    """Test get_intraday_ticker function."""
 
-    def test_all_market_data_functions_importable(self):
-        """Test that all market data service functions can be imported."""
-        # Functions are already imported at module level above; verify they are callable or expose .fn attribute.
+    def test_get_intraday_ticker_success(self, mock_server_globals, mock_sdk):
+        """Test get_intraday_ticker success."""
+        mock_sdk.marketdata.rest_client.stock.intraday.ticker.return_value = {"symbol": "2330", "name": "台積電"}
 
-        functions = [
-            get_intraday_tickers,
-            get_intraday_ticker,
-            get_intraday_quote,
-            get_intraday_candles,
-            get_intraday_trades,
-            get_intraday_volumes,
-            get_snapshot_quotes,
-            get_snapshot_movers,
-            get_snapshot_actives,
-            get_historical_stats,
-            get_realtime_quotes,
-        ]
+        result = get_intraday_ticker({"symbol": "2330"})
 
-        for func in functions:
-            assert hasattr(func, "fn") or callable(func), "Market data service function is neither MCP tool (.fn) nor callable"
+        assert result["status"] == "success"
+        assert result["data"] == {"symbol": "2330", "name": "台積電"}
+        assert "成功獲取 2330 基本資料" in result["message"]
 
-    def test_market_data_service_module_structure(self):
-        """Test market_data_service module has expected structure."""
-        import fubon_api_mcp_server.market_data_service as market_data_module
 
-        # Check for expected functions
-        expected_functions = [
-            "get_intraday_tickers",
-            "get_intraday_ticker",
-            "get_intraday_quote",
-            "get_intraday_candles",
-            "get_intraday_trades",
-            "get_intraday_volumes",
-            "get_snapshot_quotes",
-            "get_snapshot_movers",
-            "get_snapshot_actives",
-            "get_historical_stats",
-            "get_realtime_quotes",
-        ]
+class TestGetIntradayQuote:
+    """Test get_intraday_quote function."""
 
-        for func_name in expected_functions:
-            assert hasattr(market_data_module, func_name), f"Market data service module missing function: {func_name}"
+    def test_get_intraday_quote_success(self, mock_server_globals, mock_sdk):
+        """Test get_intraday_quote success."""
+        mock_sdk.marketdata.rest_client.stock.intraday.quote.return_value = {"price": 500.0, "volume": 10000}
+
+        result = get_intraday_quote({"symbol": "2330"})
+
+        assert result["status"] == "success"
+        assert result["data"] == {"price": 500.0, "volume": 10000}
+        assert "成功獲取 2330 即時報價" in result["message"]
+
+
+class TestGetIntradayCandles:
+    """Test get_intraday_candles function."""
+
+    def test_get_intraday_candles_success(self, mock_server_globals, mock_sdk):
+        """Test get_intraday_candles success."""
+        mock_sdk.marketdata.rest_client.stock.intraday.candles.return_value = [{"time": "09:00", "open": 500.0}]
+
+        result = get_intraday_candles({"symbol": "2330"})
+
+        assert result["status"] == "success"
+        assert result["data"] == [{"time": "09:00", "open": 500.0}]
+        assert "成功獲取 2330 盤中 K 線" in result["message"]
+
+
+class TestGetIntradayTrades:
+    """Test get_intraday_trades function."""
+
+    def test_get_intraday_trades_success(self, mock_server_globals, mock_sdk):
+        """Test get_intraday_trades success."""
+        mock_sdk.marketdata.rest_client.stock.intraday.trades.return_value = [{"time": "09:00", "price": 500.0, "volume": 100}]
+
+        result = get_intraday_trades({"symbol": "2330"})
+
+        assert result["status"] == "success"
+        assert result["data"] == [{"time": "09:00", "price": 500.0, "volume": 100}]
+        assert "成功獲取 2330 成交明細" in result["message"]
+
+
+class TestGetIntradayVolumes:
+    """Test get_intraday_volumes function."""
+
+    def test_get_intraday_volumes_success(self, mock_server_globals, mock_sdk):
+        """Test get_intraday_volumes success."""
+        mock_sdk.marketdata.rest_client.stock.intraday.volumes.return_value = [{"price": 500.0, "volume": 1000}]
+
+        result = get_intraday_volumes({"symbol": "2330"})
+
+        assert result["status"] == "success"
+        assert result["data"] == [{"price": 500.0, "volume": 1000}]
+        assert "成功獲取 2330 分價量表" in result["message"]
+
+
+class TestGetSnapshotQuotes:
+    """Test get_snapshot_quotes function."""
+
+    def test_get_snapshot_quotes_success(self, mock_server_globals, mock_sdk):
+        """Test get_snapshot_quotes success."""
+        mock_sdk.marketdata.rest_client.stock.snapshot.quotes.return_value = [{"symbol": "2330", "price": 500.0}]
+
+        result = get_snapshot_quotes({"market": "TSE"})
+
+        assert result["status"] == "success"
+        assert result["data"] == [{"symbol": "2330", "price": 500.0}]
+        assert "成功獲取 TSE 行情快照" in result["message"]
+
+
+class TestGetSnapshotMovers:
+    """Test get_snapshot_movers function."""
+
+    def test_get_snapshot_movers_success(self, mock_server_globals, mock_sdk):
+        """Test get_snapshot_movers success."""
+        mock_sdk.marketdata.rest_client.stock.snapshot.movers.return_value = [{"symbol": "2330", "change": 5.0}]
+
+        result = get_snapshot_movers({"market": "TSE"})
+
+        assert result["status"] == "success"
+        assert result["data"] == [{"symbol": "2330", "change": 5.0}]
+        assert "成功獲取 TSE 漲跌幅排行" in result["message"]
+
+
+class TestGetSnapshotActives:
+    """Test get_snapshot_actives function."""
+
+    def test_get_snapshot_actives_success(self, mock_server_globals, mock_sdk):
+        """Test get_snapshot_actives success."""
+        mock_data = [{"symbol": "2330", "volume": 10000}] * 60  # More than 50
+        mock_sdk.marketdata.rest_client.stock.snapshot.actives.return_value = {"data": mock_data}
+
+        result = get_snapshot_actives({"market": "TSE"})
+
+        assert result["status"] == "success"
+        assert len(result["data"]) == 50  # Limited to 50
+        assert result["total_count"] == 60
+        assert result["returned_count"] == 50
+        assert "成交量值排行" in result["message"]
+
+    def test_get_snapshot_actives_small_data(self, mock_server_globals, mock_sdk):
+        """Test get_snapshot_actives with small data set."""
+        mock_data = [{"symbol": "2330", "volume": 10000}] * 10
+        mock_sdk.marketdata.rest_client.stock.snapshot.actives.return_value = {"data": mock_data}
+
+        result = get_snapshot_actives({"market": "TSE"})
+
+        assert result["status"] == "success"
+        assert len(result["data"]) == 10
+        assert result["total_count"] == 10
+        assert result["returned_count"] == 10
+
+
+class TestGetHistoricalStats:
+    """Test get_historical_stats function."""
+
+    def test_get_historical_stats_success(self, mock_server_globals, mock_sdk):
+        """Test get_historical_stats success."""
+        mock_sdk.marketdata.rest_client.stock.historical.stats.return_value = {"52w_high": 600.0, "52w_low": 400.0}
+
+        result = get_historical_stats({"symbol": "2330"})
+
+        assert result["status"] == "success"
+        assert result["data"] == {"52w_high": 600.0, "52w_low": 400.0}
+        assert "成功獲取 2330 近 52 週數據" in result["message"]
+
+    def test_get_historical_stats_exception(self, mock_server_globals, mock_sdk):
+        """Test get_historical_stats with exception."""
+        mock_sdk.marketdata.rest_client.stock.historical.stats.side_effect = Exception("API error")
+
+        result = get_historical_stats({"symbol": "2330"})
+
+        assert result["status"] == "error"
+        assert "獲取歷史統計失敗" in result["message"]

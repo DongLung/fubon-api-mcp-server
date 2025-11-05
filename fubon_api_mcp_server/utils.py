@@ -104,6 +104,7 @@ def validate_and_get_account(account: str) -> Tuple[Optional[Any], Optional[str]
         # Store in config_module for potential reuse
         config_module.sdk = sdk
         config_module.accounts = accounts
+        # Note: reststock is initialized only when needed for market data operations
         
     except Exception as e:
         return None, f"Account authentication failed: {str(e)}"
