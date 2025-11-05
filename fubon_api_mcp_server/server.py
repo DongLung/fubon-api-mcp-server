@@ -1107,9 +1107,13 @@ def get_realtime_quotes(args: Dict) -> dict:
         validated_args = GetRealtimeQuotesArgs(**args)
         symbol = validated_args.symbol
 
-        # 使用 realtime API
-        quotes = sdk.marketdata.realtime.quote(symbol=symbol)
-        return {"status": "success", "data": quotes, "message": f"成功獲取 {symbol} 即時行情"}
+        # 使用 intraday API 獲取即時行情
+        from fubon_neo.fugle_marketdata.rest.base_rest import FugleAPIError
+        try:
+            result = reststock.intraday.quote(symbol=symbol)
+            return {"status": "success", "data": result, "message": f"成功獲取 {symbol} 即時行情"}
+        except FugleAPIError as e:
+            return {"status": "error", "data": None, "message": f"API 錯誤: {e}"}
     except Exception as e:
         return {"status": "error", "data": None, "message": f"獲取即時行情失敗: {str(e)}"}
 
