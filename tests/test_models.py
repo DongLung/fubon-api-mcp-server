@@ -45,11 +45,7 @@ class TestHistoricalDataModels:
 
     def test_historical_candles_args_valid(self):
         """Test HistoricalCandlesArgs with valid data."""
-        args = HistoricalCandlesArgs(
-            symbol="2330",
-            from_date="2024-01-01",
-            to_date="2024-01-31"
-        )
+        args = HistoricalCandlesArgs(symbol="2330", from_date="2024-01-01", to_date="2024-01-31")
         assert args.symbol == "2330"
         assert args.from_date == "2024-01-01"
         assert args.to_date == "2024-01-31"
@@ -66,32 +62,22 @@ class TestTradingModels:
 
     def test_place_order_args_valid(self):
         """Test PlaceOrderArgs with valid data."""
-        args = PlaceOrderArgs(
-            account="12345678",
-            symbol="2330",
-            quantity=1000,
-            price=500.0,
-            buy_sell="Buy"
-        )
+        args = PlaceOrderArgs(account="12345678", symbol="2330", quantity=1000, price=500.0, buy_sell="Buy")
         assert args.account == "12345678"
         assert args.symbol == "2330"
         assert args.quantity == 1000
         assert args.price == 500.0
         assert args.buy_sell == "Buy"
         assert args.market_type == "Common"  # default
-        assert args.price_type == "Limit"    # default
-        assert args.time_in_force == "ROD"   # default
-        assert args.order_type == "Stock"    # default
+        assert args.price_type == "Limit"  # default
+        assert args.time_in_force == "ROD"  # default
+        assert args.order_type == "Stock"  # default
 
     def test_place_order_args_invalid_buy_sell(self):
         """Test PlaceOrderArgs accepts any string for buy_sell (no validation)."""
         # Note: Current model doesn't restrict buy_sell values
         args = PlaceOrderArgs(
-            account="12345678",
-            symbol="2330",
-            quantity=1000,
-            price=500.0,
-            buy_sell="Invalid"  # This is accepted as any string
+            account="12345678", symbol="2330", quantity=1000, price=500.0, buy_sell="Invalid"  # This is accepted as any string
         )
         assert args.buy_sell == "Invalid"
 
@@ -103,36 +89,21 @@ class TestTradingModels:
 
     def test_modify_price_args_valid(self):
         """Test ModifyPriceArgs with valid data."""
-        args = ModifyPriceArgs(
-            account="12345678",
-            order_no="12345",
-            new_price=505.0
-        )
+        args = ModifyPriceArgs(account="12345678", order_no="12345", new_price=505.0)
         assert args.account == "12345678"
         assert args.order_no == "12345"
         assert args.new_price == 505.0
 
     def test_modify_quantity_args_valid(self):
         """Test ModifyQuantityArgs with valid data."""
-        args = ModifyQuantityArgs(
-            account="12345678",
-            order_no="12345",
-            new_quantity=2000
-        )
+        args = ModifyQuantityArgs(account="12345678", order_no="12345", new_quantity=2000)
         assert args.account == "12345678"
         assert args.order_no == "12345"
         assert args.new_quantity == 2000
 
     def test_batch_place_order_args_valid(self):
         """Test BatchPlaceOrderArgs with valid data."""
-        orders = [
-            {
-                "symbol": "2330",
-                "quantity": 1000,
-                "price": 500.0,
-                "buy_sell": "Buy"
-            }
-        ]
+        orders = [{"symbol": "2330", "quantity": 1000, "price": 500.0, "buy_sell": "Buy"}]
         args = BatchPlaceOrderArgs(account="12345678", orders=orders)
         assert args.account == "12345678"
         assert len(args.orders) == 1
@@ -273,33 +244,19 @@ class TestModelValidation:
         # Test that string cannot be passed to int field
         with pytest.raises(ValidationError):
             PlaceOrderArgs(
-                account="12345678",
-                symbol="2330",
-                quantity="not_an_int",  # Should be int
-                price=500.0,
-                buy_sell="Buy"
+                account="12345678", symbol="2330", quantity="not_an_int", price=500.0, buy_sell="Buy"  # Should be int
             )
 
         # Test that string cannot be passed to float field
         with pytest.raises(ValidationError):
             PlaceOrderArgs(
-                account="12345678",
-                symbol="2330",
-                quantity=1000,
-                price="not_a_float",  # Should be float
-                buy_sell="Buy"
+                account="12345678", symbol="2330", quantity=1000, price="not_a_float", buy_sell="Buy"  # Should be float
             )
 
     def test_model_optional_fields(self):
         """Test optional fields in models."""
         # PlaceOrderArgs has optional fields with defaults
-        args = PlaceOrderArgs(
-            account="12345678",
-            symbol="2330",
-            quantity=1000,
-            price=500.0,
-            buy_sell="Buy"
-        )
+        args = PlaceOrderArgs(account="12345678", symbol="2330", quantity=1000, price=500.0, buy_sell="Buy")
 
         # These should have default values
         assert args.market_type == "Common"

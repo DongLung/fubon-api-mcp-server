@@ -4,20 +4,20 @@ Tests for account_service.py - Account management services.
 This module tests account-related functions including basic account info retrieval.
 """
 
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
 from fubon_mcp import config
 from fubon_mcp.account_service import (
+    _get_account_financial_info,
     _get_all_accounts_basic_info,
     _get_basic_account_info,
-    _get_account_financial_info,
     get_account_info,
-    get_inventory,
-    get_unrealized_pnl,
-    get_settlement_info,
     get_bank_balance,
+    get_inventory,
+    get_settlement_info,
+    get_unrealized_pnl,
 )
 
 
@@ -67,15 +67,15 @@ class TestAccountServiceIntegration:
         import fubon_mcp.account_service as account_module
 
         # Check for expected functions
-        expected_functions = [
-            '_get_all_accounts_basic_info'
-        ]
+        expected_functions = ["_get_all_accounts_basic_info"]
 
         for func_name in expected_functions:
             assert hasattr(account_module, func_name), f"Account service module missing function: {func_name}"
 
         # Test that the function is callable
         assert callable(_get_all_accounts_basic_info)
+
+
 class TestBasicAccountInfo:
     """Test _get_basic_account_info function."""
 
@@ -101,7 +101,7 @@ class TestAccountFinancialInfo:
     def test_get_account_financial_info_success(self):
         """Test successful retrieval of account financial info."""
         mock_account = MagicMock()
-        
+
         result = _get_account_financial_info(mock_account)
 
         # Should contain the expected keys
@@ -112,7 +112,7 @@ class TestAccountFinancialInfo:
     def test_get_account_financial_info_with_exception(self):
         """Test account financial info with SDK not initialized."""
         # Mock config.sdk to be None
-        with patch('fubon_mcp.account_service.config_module.sdk', None):
+        with patch("fubon_mcp.account_service.config_module.sdk", None):
             mock_account = MagicMock()
             result = _get_account_financial_info(mock_account)
 
@@ -123,13 +123,10 @@ class TestAccountFinancialInfo:
 class TestGetAccountInfo:
     """Test get_account_info function."""
 
-    @patch('fubon_mcp.account_service._get_all_accounts_basic_info')
+    @patch("fubon_mcp.account_service._get_all_accounts_basic_info")
     def test_get_account_info_success(self, mock_get_all):
         """Test successful account info retrieval."""
-        mock_get_all.return_value = {
-            "status": "success",
-            "data": [{"account": "12345678"}]
-        }
+        mock_get_all.return_value = {"status": "success", "data": [{"account": "12345678"}]}
 
         # Call the underlying function tool if present, otherwise call the function directly
         result = get_account_info.fn({}) if hasattr(get_account_info, "fn") else get_account_info({})
@@ -137,13 +134,10 @@ class TestGetAccountInfo:
         assert result["status"] == "success"
         assert len(result["data"]) == 1
 
-    @patch('fubon_mcp.account_service._get_all_accounts_basic_info')
+    @patch("fubon_mcp.account_service._get_all_accounts_basic_info")
     def test_get_account_info_error(self, mock_get_all):
         """Test account info retrieval with error."""
-        mock_get_all.return_value = {
-            "status": "error",
-            "data": None
-        }
+        mock_get_all.return_value = {"status": "error", "data": None}
 
         result = get_account_info.fn({}) if hasattr(get_account_info, "fn") else get_account_info({})
 
@@ -156,14 +150,18 @@ class TestGetInventory:
     def test_get_inventory_success(self, mock_accounts):
         """Test successful inventory retrieval."""
         config.accounts = mock_accounts
-        
+
         # Mock the SDK accounting call
         mock_inventory_result = MagicMock()
         mock_inventory_result.is_success = True
         mock_inventory_result.data = [{"symbol": "2330", "quantity": 1000}]
         config.sdk.accounting.inventories.return_value = mock_inventory_result
         # Call the underlying function tool if present, otherwise call the function directly
-        result = get_inventory.fn({"account": "12345678"}) if hasattr(get_inventory, "fn") else get_inventory({"account": "12345678"})
+        result = (
+            get_inventory.fn({"account": "12345678"})
+            if hasattr(get_inventory, "fn")
+            else get_inventory({"account": "12345678"})
+        )
 
         assert result["status"] == "success"
         assert len(result["data"]) == 1
@@ -173,7 +171,11 @@ class TestGetInventory:
         """Test inventory retrieval with no accounts."""
         config.accounts = None
 
-        result = get_inventory.fn({"account": "12345678"}) if hasattr(get_inventory, "fn") else get_inventory({"account": "12345678"})
+        result = (
+            get_inventory.fn({"account": "12345678"})
+            if hasattr(get_inventory, "fn")
+            else get_inventory({"account": "12345678"})
+        )
 
         assert result["status"] == "error"
         assert "Account authentication failed" in result["message"]
@@ -185,15 +187,19 @@ class TestGetUnrealizedPnL:
     def test_get_unrealized_pnl_success(self, mock_accounts):
         """Test successful unrealized PnL retrieval."""
         config.accounts = mock_accounts
-        
+
         # Mock the SDK accounting call
         mock_pnl_result = MagicMock()
         mock_pnl_result.is_success = True
         mock_pnl_result.data = {"total_pnl": 5000, "positions": []}
         config.sdk.accounting.unrealized_gains_and_loses.return_value = mock_pnl_result
-        
-        result = get_unrealized_pnl.fn({"account": "12345678"}) if hasattr(get_unrealized_pnl, "fn") else get_unrealized_pnl({"account": "12345678"})
-        
+
+        result = (
+            get_unrealized_pnl.fn({"account": "12345678"})
+            if hasattr(get_unrealized_pnl, "fn")
+            else get_unrealized_pnl({"account": "12345678"})
+        )
+
         assert result["status"] == "success"
         assert result["data"]["total_pnl"] == 5000
 
@@ -201,7 +207,11 @@ class TestGetUnrealizedPnL:
         """Test unrealized PnL retrieval with no accounts."""
         config.accounts = None
 
-        result = get_unrealized_pnl.fn({"account": "12345678"}) if hasattr(get_unrealized_pnl, "fn") else get_unrealized_pnl({"account": "12345678"})
+        result = (
+            get_unrealized_pnl.fn({"account": "12345678"})
+            if hasattr(get_unrealized_pnl, "fn")
+            else get_unrealized_pnl({"account": "12345678"})
+        )
 
         assert result["status"] == "error"
 
@@ -212,7 +222,7 @@ class TestGetSettlementInfo:
     def test_get_settlement_info_success(self, mock_accounts):
         """Test successful settlement info retrieval."""
         config.accounts = mock_accounts
-        
+
         # Mock the SDK accounting call
         mock_settlement_result = MagicMock()
         mock_settlement_result.is_success = True
@@ -222,13 +232,21 @@ class TestGetSettlementInfo:
         mock_settlement_result.data = {"settlement_date": "2023-01-01"}
         config.sdk.accounting.query_settlement.return_value = mock_settlement_result
         # Call the underlying function tool if present, otherwise call the function directly
-        result = get_settlement_info.fn({"account": "12345678"}) if hasattr(get_settlement_info, "fn") else get_settlement_info({"account": "12345678"})
+        result = (
+            get_settlement_info.fn({"account": "12345678"})
+            if hasattr(get_settlement_info, "fn")
+            else get_settlement_info({"account": "12345678"})
+        )
 
         assert result["status"] == "success"
         assert result["data"]["settlement_date"] == "2023-01-01"
         config.accounts = None
 
-        result = get_settlement_info.fn({"account": "12345678"}) if hasattr(get_settlement_info, "fn") else get_settlement_info({"account": "12345678"})
+        result = (
+            get_settlement_info.fn({"account": "12345678"})
+            if hasattr(get_settlement_info, "fn")
+            else get_settlement_info({"account": "12345678"})
+        )
 
         assert result["status"] == "error"
 
@@ -247,7 +265,11 @@ class TestGetBankBalance:
         config.sdk.accounting.bank_remain.return_value = mock_balance_result
 
         # Call the underlying function tool if present, otherwise call the function directly
-        result = get_bank_balance.fn({"account": "12345678"}) if hasattr(get_bank_balance, "fn") else get_bank_balance({"account": "12345678"})
+        result = (
+            get_bank_balance.fn({"account": "12345678"})
+            if hasattr(get_bank_balance, "fn")
+            else get_bank_balance({"account": "12345678"})
+        )
 
         assert result["status"] == "success"
         assert result["data"]["bank_balance"] == 50000
@@ -257,7 +279,11 @@ class TestGetBankBalance:
         """Test bank balance retrieval with no accounts."""
         config.accounts = None
 
-        result = get_bank_balance.fn({"account": "12345678"}) if hasattr(get_bank_balance, "fn") else get_bank_balance({"account": "12345678"})
+        result = (
+            get_bank_balance.fn({"account": "12345678"})
+            if hasattr(get_bank_balance, "fn")
+            else get_bank_balance({"account": "12345678"})
+        )
 
         assert result["status"] == "error"
         assert "Account authentication failed" in result["message"]

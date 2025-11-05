@@ -7,8 +7,7 @@ order reports, filled reports, and event notifications.
 
 from typing import Dict
 
-from . import callbacks
-from . import config
+from . import callbacks, config
 from .config import mcp
 from .models import (
     GetEventReportsArgs,
@@ -170,7 +169,9 @@ def get_all_reports(args: Dict) -> Dict:
 
         all_reports = {
             "order_reports": callbacks.latest_order_reports[-limit:] if callbacks.latest_order_reports else [],
-            "order_changed_reports": callbacks.latest_order_changed_reports[-limit:] if callbacks.latest_order_changed_reports else [],
+            "order_changed_reports": (
+                callbacks.latest_order_changed_reports[-limit:] if callbacks.latest_order_changed_reports else []
+            ),
             "filled_reports": callbacks.latest_filled_reports[-limit:] if callbacks.latest_filled_reports else [],
             "event_reports": callbacks.latest_event_reports[-limit:] if callbacks.latest_event_reports else [],
         }
@@ -185,3 +186,26 @@ def get_all_reports(args: Dict) -> Dict:
         }
     except Exception as e:
         return {"status": "error", "data": None, "message": f"Failed to get all reports: {str(e)}"}
+
+
+# =============================================================================
+# MCP Compatibility Layer
+# =============================================================================
+
+# Ensure exported functions have .fn attribute for MCP compatibility
+try:
+    _fn_names = (
+        "get_order_results",
+        "get_order_reports",
+        "get_order_changed_reports",
+        "get_filled_reports",
+        "get_event_reports",
+        "get_all_reports",
+    )
+    for _name in _fn_names:
+        _f = globals().get(_name)
+        if callable(_f) and not hasattr(_f, "fn"):
+            _f.fn = _f
+    del _name, _f, _fn_names
+except Exception:
+    pass

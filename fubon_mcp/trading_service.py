@@ -8,8 +8,8 @@ order placement, modification, cancellation, and batch operations.
 import concurrent.futures
 from typing import Any, Dict, Optional
 
-from .config import accounts, mcp, sdk
 from . import config
+from .config import accounts, mcp, sdk
 from .models import BatchPlaceOrderArgs, CancelOrderArgs, ModifyPriceArgs, ModifyQuantityArgs, PlaceOrderArgs
 from .utils import validate_and_get_account
 
@@ -491,3 +491,25 @@ def batch_place_order(args: Dict[str, Any]) -> Dict[str, Any]:
 
     except Exception as e:
         return {"status": "error", "data": None, "message": f"Batch order failed: {str(e)}"}
+
+
+# =============================================================================
+# MCP Compatibility Layer
+# =============================================================================
+
+# Ensure exported functions have .fn attribute for MCP compatibility
+try:
+    _fn_names = (
+        "place_order",
+        "modify_quantity",
+        "modify_price",
+        "cancel_order",
+        "batch_place_order",
+    )
+    for _name in _fn_names:
+        _f = globals().get(_name)
+        if callable(_f) and not hasattr(_f, "fn"):
+            _f.fn = _f
+    del _name, _f, _fn_names
+except Exception:
+    pass

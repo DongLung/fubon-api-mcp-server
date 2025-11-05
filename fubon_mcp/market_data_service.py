@@ -7,8 +7,8 @@ real-time quotes, historical data, intraday data, and snapshots.
 
 from typing import Any, Dict
 
-from .config import mcp, reststock, sdk
 from . import config
+from .config import mcp, reststock, sdk
 from .models import (
     GetHistoricalStatsArgs,
     GetIntradayCandlesArgs,

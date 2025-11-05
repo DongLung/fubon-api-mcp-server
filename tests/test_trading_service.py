@@ -30,10 +30,7 @@ class TestFindTargetOrder:
     def test_find_target_order_success(self):
         """Test successful order finding."""
         mock_order_results = MagicMock()
-        mock_order_results.data = [
-            MagicMock(order_no="12345", symbol="2330"),
-            MagicMock(order_no="67890", symbol="2454")
-        ]
+        mock_order_results.data = [MagicMock(order_no="12345", symbol="2330"), MagicMock(order_no="67890", symbol="2454")]
 
         order = _find_target_order(mock_order_results, "12345")
 
@@ -44,9 +41,7 @@ class TestFindTargetOrder:
     def test_find_target_order_not_found(self):
         """Test order not found."""
         mock_order_results = MagicMock()
-        mock_order_results.data = [
-            MagicMock(order_no="12345", symbol="2330")
-        ]
+        mock_order_results.data = [MagicMock(order_no="12345", symbol="2330")]
 
         order = _find_target_order(mock_order_results, "99999")
 
@@ -172,7 +167,11 @@ class TestPlaceOrder:
         """Test order placement with invalid account."""
         config.accounts = mock_accounts
 
-        result = place_order.fn({**sample_order_data, "account": "99999999"}) if hasattr(place_order, "fn") else place_order({**sample_order_data, "account": "99999999"})
+        result = (
+            place_order.fn({**sample_order_data, "account": "99999999"})
+            if hasattr(place_order, "fn")
+            else place_order({**sample_order_data, "account": "99999999"})
+        )
 
         assert result["status"] == "error"
         assert "Account 99999999 not found" in result["message"]
@@ -209,15 +208,11 @@ class TestModifyPrice:
         mock_modify_result.is_success = True
         mock_sdk.stock.modify_price.return_value = mock_modify_result
 
-        result = modify_price.fn({
-            "account": "12345678",
-            "order_no": "12345",
-            "new_price": 505.0
-        }) if hasattr(modify_price, "fn") else modify_price({
-            "account": "12345678",
-            "order_no": "12345",
-            "new_price": 505.0
-        })
+        result = (
+            modify_price.fn({"account": "12345678", "order_no": "12345", "new_price": 505.0})
+            if hasattr(modify_price, "fn")
+            else modify_price({"account": "12345678", "order_no": "12345", "new_price": 505.0})
+        )
 
         assert result["status"] == "success"
         assert "Successfully modified order 12345 price to 505.0" in result["message"]
@@ -232,15 +227,11 @@ class TestModifyPrice:
         mock_order_results.data = [MagicMock(order_no="12345")]
         mock_sdk.stock.get_order_results.return_value = mock_order_results
 
-        result = modify_price.fn({
-            "account": "12345678",
-            "order_no": "99999",
-            "new_price": 505.0
-        }) if hasattr(modify_price, "fn") else modify_price({
-            "account": "12345678",
-            "order_no": "99999",
-            "new_price": 505.0
-        })
+        result = (
+            modify_price.fn({"account": "12345678", "order_no": "99999", "new_price": 505.0})
+            if hasattr(modify_price, "fn")
+            else modify_price({"account": "12345678", "order_no": "99999", "new_price": 505.0})
+        )
 
         assert result["status"] == "error"
         assert "Order number 99999 not found" in result["message"]
@@ -265,15 +256,11 @@ class TestModifyQuantity:
         mock_modify_result.is_success = True
         mock_sdk.stock.modify_quantity.return_value = mock_modify_result
 
-        result = modify_quantity.fn({
-            "account": "12345678",
-            "order_no": "12345",
-            "new_quantity": 2000
-        }) if hasattr(modify_quantity, "fn") else modify_quantity({
-            "account": "12345678",
-            "order_no": "12345",
-            "new_quantity": 2000
-        })
+        result = (
+            modify_quantity.fn({"account": "12345678", "order_no": "12345", "new_quantity": 2000})
+            if hasattr(modify_quantity, "fn")
+            else modify_quantity({"account": "12345678", "order_no": "12345", "new_quantity": 2000})
+        )
 
         assert result["status"] == "success"
         assert "Successfully modified order 12345 quantity to 2000" in result["message"]
@@ -298,13 +285,11 @@ class TestCancelOrder:
         mock_cancel_result.is_success = True
         mock_sdk.stock.cancel_order.return_value = mock_cancel_result
 
-        result = cancel_order.fn({
-            "account": "12345678",
-            "order_no": "12345"
-        }) if hasattr(cancel_order, "fn") else cancel_order({
-            "account": "12345678",
-            "order_no": "12345"
-        })
+        result = (
+            cancel_order.fn({"account": "12345678", "order_no": "12345"})
+            if hasattr(cancel_order, "fn")
+            else cancel_order({"account": "12345678", "order_no": "12345"})
+        )
 
         assert result["status"] == "success"
         assert "Successfully cancelled order 12345" in result["message"]
@@ -319,13 +304,11 @@ class TestCancelOrder:
         mock_order_results.data = [MagicMock(order_no="12345")]
         mock_sdk.stock.get_order_results.return_value = mock_order_results
 
-        result = cancel_order.fn({
-            "account": "12345678",
-            "order_no": "99999"
-        }) if hasattr(cancel_order, "fn") else cancel_order({
-            "account": "12345678",
-            "order_no": "99999"
-        })
+        result = (
+            cancel_order.fn({"account": "12345678", "order_no": "99999"})
+            if hasattr(cancel_order, "fn")
+            else cancel_order({"account": "12345678", "order_no": "99999"})
+        )
 
         assert result["status"] == "error"
         assert "Order number 99999 not found" in result["message"]
@@ -339,14 +322,7 @@ class TestBatchPlaceOrder:
         config.sdk = mock_sdk
         config.accounts = mock_accounts
 
-        orders = [
-            {
-                "symbol": "2330",
-                "quantity": 1000,
-                "price": 500.0,
-                "buy_sell": "Buy"
-            }
-        ]
+        orders = [{"symbol": "2330", "quantity": 1000, "price": 500.0, "buy_sell": "Buy"}]
 
         # Mock successful order placement
         mock_result = MagicMock()
@@ -354,30 +330,22 @@ class TestBatchPlaceOrder:
         mock_result.data = {"order_no": "12345"}
         mock_sdk.stock.place_order.return_value = mock_result
 
-        result = batch_place_order.fn({
-            "account": "12345678",
-            "orders": orders,
-            "max_workers": 5
-        }) if hasattr(batch_place_order, "fn") else batch_place_order({
-            "account": "12345678",
-            "orders": orders,
-            "max_workers": 5
-        })
+        result = (
+            batch_place_order.fn({"account": "12345678", "orders": orders, "max_workers": 5})
+            if hasattr(batch_place_order, "fn")
+            else batch_place_order({"account": "12345678", "orders": orders, "max_workers": 5})
+        )
 
         assert result["status"] == "success"
         assert "Batch order completed" in result["message"]
 
     def test_batch_place_order_empty_orders(self):
         """Test batch order placement with empty order list."""
-        result = batch_place_order.fn({
-            "account": "12345678",
-            "orders": [],
-            "max_workers": 5
-        }) if hasattr(batch_place_order, "fn") else batch_place_order({
-            "account": "12345678",
-            "orders": [],
-            "max_workers": 5
-        })
+        result = (
+            batch_place_order.fn({"account": "12345678", "orders": [], "max_workers": 5})
+            if hasattr(batch_place_order, "fn")
+            else batch_place_order({"account": "12345678", "orders": [], "max_workers": 5})
+        )
 
         assert result["status"] == "error"
         assert "Order list cannot be empty" in result["message"]
@@ -388,13 +356,11 @@ class TestBatchPlaceOrder:
 
         orders = [{"symbol": "2330", "quantity": 1000, "price": 500.0, "buy_sell": "Buy"}]
 
-        result = batch_place_order.fn({
-            "account": "99999999",
-            "orders": orders
-        }) if hasattr(batch_place_order, "fn") else batch_place_order({
-            "account": "99999999",
-            "orders": orders
-        })
+        result = (
+            batch_place_order.fn({"account": "99999999", "orders": orders})
+            if hasattr(batch_place_order, "fn")
+            else batch_place_order({"account": "99999999", "orders": orders})
+        )
 
         assert result["status"] == "error"
         assert "account 99999999 not found" in result["message"]
@@ -408,7 +374,7 @@ class TestBatchOperationsHelpers:
         results = [
             {"success": True, "order_no": "12345"},
             {"success": False, "error": "API Error"},
-            {"success": True, "order_no": "67890"}
+            {"success": True, "order_no": "67890"},
         ]
 
         summary = _summarize_batch_results(results)
@@ -419,25 +385,31 @@ class TestBatchOperationsHelpers:
         assert len(summary["successful_orders_detail"]) == 2
         assert len(summary["failed_orders_detail"]) == 1
 
-    @pytest.mark.skip(reason="Test hangs - skipping for now")
-    @patch('fubon_mcp.trading_service.concurrent.futures.ThreadPoolExecutor')
-    def test_execute_batch_orders(self, mock_executor, mock_sdk, mock_accounts):
+    @patch("fubon_mcp.trading_service.concurrent.futures.ThreadPoolExecutor")
+    def test_execute_batch_orders(self, mock_executor_class, mock_sdk, mock_accounts):
         """Test batch order execution."""
         config.sdk = mock_sdk
         config.accounts = mock_accounts
 
-        # Mock executor
+        # Mock executor and future
+        mock_executor = MagicMock()
+        mock_executor_class.return_value.__enter__.return_value = mock_executor
+
         mock_future = MagicMock()
         mock_future.result.return_value = {"success": True, "order_no": "12345"}
-        mock_executor.return_value.__enter__.return_value.submit.return_value = mock_future
+        mock_executor.submit.return_value = mock_future
 
-        orders = [{"symbol": "2330", "quantity": 1000, "price": 500.0, "buy_sell": "Buy"}]
-        account_obj = MagicMock()
+        # Mock as_completed to return the future
+        with patch("fubon_mcp.trading_service.concurrent.futures.as_completed") as mock_as_completed:
+            mock_as_completed.return_value = [mock_future]
 
-        results = _execute_batch_orders(account_obj, orders, 5)
+            orders = [{"symbol": "2330", "quantity": 1000, "price": 500.0, "buy_sell": "Buy"}]
+            account_obj = MagicMock()
 
-        assert len(results) == 1
-        assert results[0]["success"] is True
+            results = _execute_batch_orders(account_obj, orders, 5)
+
+            assert len(results) == 1
+            assert results[0]["success"] is True
 
 
 class TestTradingServiceIntegration:
@@ -464,13 +436,13 @@ class TestTradingServiceIntegration:
         assert callable(_execute_modify_operation)
         assert callable(_summarize_batch_results)
         assert callable(_execute_batch_orders)
-        
+
         # Test that MCP functions have .fn attribute (FunctionTool objects)
-        assert hasattr(place_order, 'fn')
-        assert hasattr(modify_price, 'fn')
-        assert hasattr(modify_quantity, 'fn')
-        assert hasattr(cancel_order, 'fn')
-        assert hasattr(batch_place_order, 'fn')
+        assert hasattr(place_order, "fn")
+        assert hasattr(modify_price, "fn")
+        assert hasattr(modify_quantity, "fn")
+        assert hasattr(cancel_order, "fn")
+        assert hasattr(batch_place_order, "fn")
 
     def test_trading_service_module_structure(self):
         """Test trading_service module has expected structure."""
@@ -478,16 +450,16 @@ class TestTradingServiceIntegration:
 
         # Check for expected functions
         expected_functions = [
-            '_find_target_order',
-            '_create_modify_object',
-            '_execute_modify_operation',
-            '_summarize_batch_results',
-            '_execute_batch_orders',
-            'place_order',
-            'modify_price',
-            'modify_quantity',
-            'cancel_order',
-            'batch_place_order'
+            "_find_target_order",
+            "_create_modify_object",
+            "_execute_modify_operation",
+            "_summarize_batch_results",
+            "_execute_batch_orders",
+            "place_order",
+            "modify_price",
+            "modify_quantity",
+            "cancel_order",
+            "batch_place_order",
         ]
 
         for func_name in expected_functions:

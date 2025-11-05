@@ -67,111 +67,111 @@ from .trading_service import batch_place_order, cancel_order, modify_price, modi
 
 # Create callable wrapper functions for testing
 def callable_get_account_info(args: Any) -> Any:
-    return get_account_info.fn(args)
+    return get_account_info.fn(args) if hasattr(get_account_info, "fn") else get_account_info(args)
 
 
 def callable_get_inventory(args: Any) -> Any:
-    return get_inventory.fn(args)
+    return get_inventory.fn(args) if hasattr(get_inventory, "fn") else get_inventory(args)
 
 
 def callable_get_bank_balance(args: Any) -> Any:
-    return get_bank_balance.fn(args)
+    return get_bank_balance.fn(args) if hasattr(get_bank_balance, "fn") else get_bank_balance(args)
 
 
 def callable_get_settlement_info(args: Any) -> Any:
-    return get_settlement_info.fn(args)
+    return get_settlement_info.fn(args) if hasattr(get_settlement_info, "fn") else get_settlement_info(args)
 
 
 def callable_get_unrealized_pnl(args: Any) -> Any:
-    return get_unrealized_pnl.fn(args)
+    return get_unrealized_pnl.fn(args) if hasattr(get_unrealized_pnl, "fn") else get_unrealized_pnl(args)
 
 
 def callable_place_order(args: Any) -> Any:
-    return place_order.fn(args)
+    return place_order.fn(args) if hasattr(place_order, "fn") else place_order(args)
 
 
 def callable_modify_price(args: Any) -> Any:
-    return modify_price.fn(args)
+    return modify_price.fn(args) if hasattr(modify_price, "fn") else modify_price(args)
 
 
 def callable_modify_quantity(args: Any) -> Any:
-    return modify_quantity.fn(args)
+    return modify_quantity.fn(args) if hasattr(modify_quantity, "fn") else modify_quantity(args)
 
 
 def callable_cancel_order(args: Any) -> Any:
-    return cancel_order.fn(args)
+    return cancel_order.fn(args) if hasattr(cancel_order, "fn") else cancel_order(args)
 
 
 def callable_batch_place_order(args: Any) -> Any:
-    return batch_place_order.fn(args)
+    return batch_place_order.fn(args) if hasattr(batch_place_order, "fn") else batch_place_order(args)
 
 
 def callable_get_order_results(args: Any) -> Any:
-    return get_order_results.fn(args)
+    return get_order_results.fn(args) if hasattr(get_order_results, "fn") else get_order_results(args)
 
 
 def callable_get_order_reports(args: Any) -> Any:
-    return get_order_reports.fn(args)
+    return get_order_reports.fn(args) if hasattr(get_order_reports, "fn") else get_order_reports(args)
 
 
 def callable_get_order_changed_reports(args: Any) -> Any:
-    return get_order_changed_reports.fn(args)
+    return get_order_changed_reports.fn(args) if hasattr(get_order_changed_reports, "fn") else get_order_changed_reports(args)
 
 
 def callable_get_filled_reports(args: Any) -> Any:
-    return get_filled_reports.fn(args)
+    return get_filled_reports.fn(args) if hasattr(get_filled_reports, "fn") else get_filled_reports(args)
 
 
 def callable_get_event_reports(args: Any) -> Any:
-    return get_event_reports.fn(args)
+    return get_event_reports.fn(args) if hasattr(get_event_reports, "fn") else get_event_reports(args)
 
 
 def callable_get_all_reports(args: Any) -> Any:
-    return get_all_reports.fn(args)
+    return get_all_reports.fn(args) if hasattr(get_all_reports, "fn") else get_all_reports(args)
 
 
 def callable_get_realtime_quotes(args: Any) -> Any:
-    return get_realtime_quotes.fn(args)
+    return get_realtime_quotes.fn(args) if hasattr(get_realtime_quotes, "fn") else get_realtime_quotes(args)
 
 
 def callable_get_intraday_tickers(args: Any) -> Any:
-    return get_intraday_tickers.fn(args)
+    return get_intraday_tickers.fn(args) if hasattr(get_intraday_tickers, "fn") else get_intraday_tickers(args)
 
 
 def callable_get_intraday_ticker(args: Any) -> Any:
-    return get_intraday_ticker.fn(args)
+    return get_intraday_ticker.fn(args) if hasattr(get_intraday_ticker, "fn") else get_intraday_ticker(args)
 
 
 def callable_get_intraday_quote(args: Any) -> Any:
-    return get_intraday_quote.fn(args)
+    return get_intraday_quote.fn(args) if hasattr(get_intraday_quote, "fn") else get_intraday_quote(args)
 
 
 def callable_get_intraday_candles(args: Any) -> Any:
-    return get_intraday_candles.fn(args)
+    return get_intraday_candles.fn(args) if hasattr(get_intraday_candles, "fn") else get_intraday_candles(args)
 
 
 def callable_get_intraday_trades(args: Any) -> Any:
-    return get_intraday_trades.fn(args)
+    return get_intraday_trades.fn(args) if hasattr(get_intraday_trades, "fn") else get_intraday_trades(args)
 
 
 def callable_get_intraday_volumes(args: Any) -> Any:
-    return get_intraday_volumes.fn(args)
+    return get_intraday_volumes.fn(args) if hasattr(get_intraday_volumes, "fn") else get_intraday_volumes(args)
 
 
 def callable_get_snapshot_quotes(args: Any) -> Any:
-    return get_snapshot_quotes.fn(args)
+    return get_snapshot_quotes.fn(args) if hasattr(get_snapshot_quotes, "fn") else get_snapshot_quotes(args)
 
 
 def callable_get_snapshot_movers(args: Any) -> Any:
-    return get_snapshot_movers.fn(args)
+    return get_snapshot_movers.fn(args) if hasattr(get_snapshot_movers, "fn") else get_snapshot_movers(args)
 
 
 def callable_get_snapshot_actives(args: Any) -> Any:
-    return get_snapshot_actives.fn(args)
+    return get_snapshot_actives.fn(args) if hasattr(get_snapshot_actives, "fn") else get_snapshot_actives(args)
 
 
 def callable_get_historical_stats(args: Any) -> Any:
-    return get_historical_stats.fn(args)
+    return get_historical_stats.fn(args) if hasattr(get_historical_stats, "fn") else get_historical_stats(args)
 
 
 def main() -> None:

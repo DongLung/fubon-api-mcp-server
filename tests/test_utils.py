@@ -19,6 +19,7 @@ class TestHandleExceptions:
 
     def test_handle_exceptions_success(self):
         """Test that decorator doesn't interfere with successful execution."""
+
         @handle_exceptions
         def successful_function():
             return "success"
@@ -28,6 +29,7 @@ class TestHandleExceptions:
 
     def test_handle_exceptions_with_exception(self, capsys):
         """Test that decorator handles exceptions properly."""
+
         @handle_exceptions
         def failing_function():
             raise ValueError("Test error")
@@ -42,6 +44,7 @@ class TestHandleExceptions:
 
     def test_handle_exceptions_preserves_function_metadata(self):
         """Test that decorator preserves function metadata."""
+
         @handle_exceptions
         def test_function():
             """Test docstring."""
@@ -104,10 +107,7 @@ class TestGetOrderByNo:
         # Mock order results
         mock_order_results = MagicMock()
         mock_order_results.is_success = True
-        mock_order_results.data = [
-            MagicMock(order_no="12345", symbol="2330"),
-            MagicMock(order_no="67890", symbol="2454")
-        ]
+        mock_order_results.data = [MagicMock(order_no="12345", symbol="2330"), MagicMock(order_no="67890", symbol="2454")]
 
         mock_sdk.stock.get_order_results.return_value = mock_order_results
 
@@ -143,12 +143,10 @@ class TestGetOrderByNo:
 
         # Clear any side effects from previous tests
         mock_sdk.stock.get_order_results.side_effect = None
-        
+
         mock_order_results = MagicMock()
         mock_order_results.is_success = True
-        mock_order_results.data = [
-            MagicMock(order_no="12345", symbol="2330")
-        ]
+        mock_order_results.data = [MagicMock(order_no="12345", symbol="2330")]
 
         mock_sdk.stock.get_order_results.return_value = mock_order_results
 
@@ -163,6 +161,7 @@ class TestSafeApiCall:
 
     def test_safe_api_call_success(self):
         """Test successful API call."""
+
         def mock_api():
             result = MagicMock()
             result.is_success = True
@@ -175,6 +174,7 @@ class TestSafeApiCall:
 
     def test_safe_api_call_failure(self):
         """Test failed API call."""
+
         def mock_api():
             result = MagicMock()
             result.is_success = False
@@ -186,6 +186,7 @@ class TestSafeApiCall:
 
     def test_safe_api_call_exception(self):
         """Test API call with exception."""
+
         def mock_api():
             raise Exception("Test exception")
 
@@ -217,12 +218,7 @@ class TestUtilsIntegration:
         import fubon_mcp.utils as utils_module
 
         # Check for expected functions
-        expected_functions = [
-            'handle_exceptions',
-            'validate_and_get_account',
-            'get_order_by_no',
-            '_safe_api_call'
-        ]
+        expected_functions = ["handle_exceptions", "validate_and_get_account", "get_order_by_no", "_safe_api_call"]
 
         for func_name in expected_functions:
             assert hasattr(utils_module, func_name), f"Utils module missing function: {func_name}"

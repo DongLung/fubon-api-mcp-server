@@ -27,17 +27,17 @@ class TestDataDirectoryConfiguration:
         # Test that the directory creation logic works
         test_dir = temp_data_dir / "test_base_dir"
         assert not test_dir.exists()
-        
+
         # Simulate the directory creation (like config.py does)
         test_dir.mkdir(parents=True, exist_ok=True)
-        
+
         assert test_dir.exists()
         assert test_dir.is_dir()
 
     def test_custom_data_dir_env_var(self, temp_data_dir):
         """Test custom data directory from environment variable."""
         custom_dir = temp_data_dir / "custom"
-        
+
         # Test the path resolution logic without reloading
         with patch.dict(os.environ, {"FUBON_DATA_DIR": str(custom_dir)}):
             expected_path = Path(os.getenv("FUBON_DATA_DIR", config.DEFAULT_DATA_DIR))
@@ -49,12 +49,15 @@ class TestEnvironmentVariables:
 
     def test_env_vars_loaded(self):
         """Test that environment variables are loaded correctly."""
-        with patch.dict(os.environ, {
-            "FUBON_USERNAME": "test_user",
-            "FUBON_PASSWORD": "test_pass",
-            "FUBON_PFX_PATH": "/path/to/cert.pfx",
-            "FUBON_PFX_PASSWORD": "cert_pass"
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "FUBON_USERNAME": "test_user",
+                "FUBON_PASSWORD": "test_pass",
+                "FUBON_PFX_PATH": "/path/to/cert.pfx",
+                "FUBON_PFX_PASSWORD": "cert_pass",
+            },
+        ):
             # Test the env var loading logic directly
             assert os.getenv("FUBON_USERNAME") == "test_user"
             assert os.getenv("FUBON_PASSWORD") == "test_pass"
@@ -70,21 +73,23 @@ class TestEnvironmentVariables:
         for key in ["HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"]:
             if key in os.environ:
                 env_patch[key] = os.environ[key]
-        
+
         with patch.dict(os.environ, env_patch, clear=True):
             # Test that env vars are None when not set
             assert os.getenv("FUBON_USERNAME") is None
             assert os.getenv("FUBON_PASSWORD") is None
             assert os.getenv("FUBON_PFX_PATH") is None
             assert os.getenv("FUBON_PFX_PASSWORD") is None
+
+
 class TestMCPInstance:
     """Test MCP server instance."""
 
     def test_mcp_instance_created(self):
         """Test that MCP instance is created."""
         assert config.mcp is not None
-        assert hasattr(config.mcp, 'tool')
-        assert hasattr(config.mcp, 'resource')
+        assert hasattr(config.mcp, "tool")
+        assert hasattr(config.mcp, "resource")
 
     def test_mcp_name(self):
         """Test MCP server name."""
@@ -155,16 +160,16 @@ class TestConfigurationIntegration:
     def test_config_module_structure(self):
         """Test that config module has expected structure."""
         required_attrs = [
-            'DEFAULT_DATA_DIR',
-            'BASE_DATA_DIR',
-            'username',
-            'password',
-            'pfx_path',
-            'pfx_password',
-            'mcp',
-            'sdk',
-            'accounts',
-            'reststock'
+            "DEFAULT_DATA_DIR",
+            "BASE_DATA_DIR",
+            "username",
+            "password",
+            "pfx_path",
+            "pfx_password",
+            "mcp",
+            "sdk",
+            "accounts",
+            "reststock",
         ]
 
         for attr in required_attrs:

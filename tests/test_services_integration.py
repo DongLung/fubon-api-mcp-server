@@ -4,8 +4,8 @@ Tests for remaining services - historical_data_service, indicators_service, data
 This module contains tests for the remaining service modules in the Fubon MCP Server.
 """
 
-from unittest.mock import MagicMock, patch
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -20,11 +20,11 @@ class TestHistoricalDataService:
         from fubon_mcp import historical_data_service
 
         # Check for expected MCP tool - historical_candles
-        assert hasattr(historical_data_service, 'historical_candles')
+        assert hasattr(historical_data_service, "historical_candles")
         # It's an MCP FunctionTool, check for .fn
-        assert hasattr(historical_data_service.historical_candles, 'fn')
+        assert hasattr(historical_data_service.historical_candles, "fn")
 
-    @patch('fubon_mcp.data_handler.Path')
+    @patch("fubon_mcp.data_handler.Path")
     def test_get_historical_candles_basic(self, mock_path):
         """Test basic historical candles retrieval."""
         from fubon_mcp.historical_data_service import historical_candles
@@ -32,16 +32,20 @@ class TestHistoricalDataService:
         # Mock file operations
         mock_data_file = MagicMock()
         mock_path.return_value.exists.return_value = False  # Force API call
-        
+
         # Mock reststock to return data
         config.reststock = MagicMock()
         config.reststock.historical.candles.return_value = {
             "data": [{"date": "2024-01-01", "open": 500.0, "close": 505.0, "volume": 1000}]
         }
 
-        result = historical_candles.fn({"symbol": "2330", "from_date": "2024-01-01", "to_date": "2024-01-02"}) if hasattr(historical_candles, "fn") else historical_candles({"symbol": "2330", "from_date": "2024-01-01", "to_date": "2024-01-02"})
+        result = (
+            historical_candles.fn({"symbol": "2330", "from_date": "2024-01-01", "to_date": "2024-01-02"})
+            if hasattr(historical_candles, "fn")
+            else historical_candles({"symbol": "2330", "from_date": "2024-01-01", "to_date": "2024-01-02"})
+        )
         print(f"Result: {result}")
-        
+
         assert result["status"] == "success"
         assert "data" in result
 
@@ -54,7 +58,7 @@ class TestIndicatorsService:
         from fubon_mcp import indicators_service
 
         # Check for expected functions - may be empty or minimal
-        assert hasattr(indicators_service, '__file__')
+        assert hasattr(indicators_service, "__file__")
 
 
 class TestDataHandler:
@@ -65,20 +69,25 @@ class TestDataHandler:
         from fubon_mcp import data_handler
 
         # Check for expected functions (actual function names from data_handler.py)
-        expected_functions = ['read_local_stock_data', 'save_to_local_csv', 'process_historical_data', 'fetch_historical_data_segment']
+        expected_functions = [
+            "read_local_stock_data",
+            "save_to_local_csv",
+            "process_historical_data",
+            "fetch_historical_data_segment",
+        ]
         for func_name in expected_functions:
             assert hasattr(data_handler, func_name)
 
-    @patch('fubon_mcp.data_handler.pd')
+    @patch("fubon_mcp.data_handler.pd")
     def test_save_and_load_historical_data(self, mock_pd):
         """Test saving and loading historical data."""
-        from fubon_mcp.data_handler import save_to_local_csv, read_local_stock_data
+        from fubon_mcp.data_handler import read_local_stock_data, save_to_local_csv
 
         # Mock pandas operations
         mock_df = MagicMock()
         mock_pd.DataFrame.return_value = mock_df
         mock_pd.read_csv.return_value = mock_df
-        
+
         # Test that functions are callable (they require real file system)
         assert callable(save_to_local_csv)
         assert callable(read_local_stock_data)
@@ -92,7 +101,7 @@ class TestCallbacks:
         from fubon_mcp import callbacks
 
         # Check for expected attributes
-        assert hasattr(callbacks, '__file__')
+        assert hasattr(callbacks, "__file__")
 
 
 class TestServer:
@@ -104,11 +113,11 @@ class TestServer:
 
         # Check for expected functions
         expected_functions = [
-            'main',
-            'callable_get_account_info',
-            'callable_get_inventory',
-            'callable_place_order',
-            'callable_cancel_order'
+            "main",
+            "callable_get_account_info",
+            "callable_get_inventory",
+            "callable_place_order",
+            "callable_cancel_order",
         ]
         for func_name in expected_functions:
             assert hasattr(server, func_name)
@@ -116,11 +125,7 @@ class TestServer:
 
     def test_callable_functions_are_callable(self):
         """Test that callable wrapper functions work."""
-        from fubon_mcp.server import (
-            callable_get_account_info,
-            callable_get_inventory,
-            callable_get_bank_balance
-        )
+        from fubon_mcp.server import callable_get_account_info, callable_get_bank_balance, callable_get_inventory
 
         # These should be callable and return some result
         # (may return error due to no SDK, but should not crash)
@@ -139,15 +144,15 @@ class TestIntegrationAllServices:
     def test_all_services_can_be_imported(self):
         """Test that all service modules can be imported without errors."""
         services = [
-            'fubon_mcp.account_service',
-            'fubon_mcp.trading_service',
-            'fubon_mcp.market_data_service',
-            'fubon_mcp.historical_data_service',
-            'fubon_mcp.indicators_service',
-            'fubon_mcp.reports_service',
-            'fubon_mcp.data_handler',
-            'fubon_mcp.callbacks',
-            'fubon_mcp.server'
+            "fubon_mcp.account_service",
+            "fubon_mcp.trading_service",
+            "fubon_mcp.market_data_service",
+            "fubon_mcp.historical_data_service",
+            "fubon_mcp.indicators_service",
+            "fubon_mcp.reports_service",
+            "fubon_mcp.data_handler",
+            "fubon_mcp.callbacks",
+            "fubon_mcp.server",
         ]
 
         for service in services:
@@ -161,15 +166,10 @@ class TestIntegrationAllServices:
         import fubon_mcp
 
         # Check version
-        assert hasattr(fubon_mcp, '__version__')
+        assert hasattr(fubon_mcp, "__version__")
 
         # Check main exports
-        expected_exports = [
-            'mcp',
-            'main',
-            'callable_get_account_info',
-            'callable_get_inventory'
-        ]
+        expected_exports = ["mcp", "main", "callable_get_account_info", "callable_get_inventory"]
 
         for export in expected_exports:
             assert hasattr(fubon_mcp, export), f"Main package missing export: {export}"
@@ -179,7 +179,7 @@ class TestIntegrationAllServices:
         # Test that config can be imported and has expected attributes
         from fubon_mcp import config
 
-        required_attrs = ['mcp', 'sdk', 'accounts', 'reststock', 'BASE_DATA_DIR']
+        required_attrs = ["mcp", "sdk", "accounts", "reststock", "BASE_DATA_DIR"]
         for attr in required_attrs:
             assert hasattr(config, attr), f"Config missing attribute: {attr}"
 
@@ -191,20 +191,10 @@ class TestIntegrationAllServices:
         from fubon_mcp import models
 
         # Test that key models can be imported
-        from fubon_mcp.models import (
-            PlaceOrderArgs,
-            GetAccountInfoArgs,
-            HistoricalCandlesArgs
-        )
+        from fubon_mcp.models import GetAccountInfoArgs, HistoricalCandlesArgs, PlaceOrderArgs
 
         # Test model instantiation
-        order_args = PlaceOrderArgs(
-            account="12345678",
-            symbol="2330",
-            quantity=1000,
-            price=500.0,
-            buy_sell="Buy"
-        )
+        order_args = PlaceOrderArgs(account="12345678", symbol="2330", quantity=1000, price=500.0, buy_sell="Buy")
         assert order_args.account == "12345678"
 
         account_args = GetAccountInfoArgs(account="12345678")
@@ -215,11 +205,7 @@ class TestIntegrationAllServices:
         from fubon_mcp import utils
 
         # Test that key utilities can be imported
-        from fubon_mcp.utils import (
-            handle_exceptions,
-            validate_and_get_account,
-            _safe_api_call
-        )
+        from fubon_mcp.utils import _safe_api_call, handle_exceptions, validate_and_get_account
 
         # Test utility functions
         @handle_exceptions

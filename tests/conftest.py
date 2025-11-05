@@ -39,18 +39,8 @@ def mock_accounts():
     accounts = MagicMock()
     accounts.is_success = True
     accounts.data = [
-        MagicMock(
-            name="Test Account 1",
-            branch_no="123",
-            account="12345678",
-            account_type="Stock"
-        ),
-        MagicMock(
-            name="Test Account 2",
-            branch_no="456",
-            account="87654321",
-            account_type="Stock"
-        )
+        MagicMock(name="Test Account 1", branch_no="123", account="12345678", account_type="Stock"),
+        MagicMock(name="Test Account 2", branch_no="456", account="87654321", account_type="Stock"),
     ]
     return accounts
 
@@ -59,7 +49,7 @@ def mock_accounts():
 def mock_reststock():
     """Create mock REST stock client for testing."""
     reststock = MagicMock()
-    
+
     # Mock the nested structure used by the actual API
     reststock.intraday = MagicMock()
     reststock.intraday.tickers = MagicMock()
@@ -68,15 +58,15 @@ def mock_reststock():
     reststock.intraday.candles = MagicMock()
     reststock.intraday.trades = MagicMock()
     reststock.intraday.volumes = MagicMock()
-    
+
     reststock.snapshot = MagicMock()
     reststock.snapshot.quotes = MagicMock()
     reststock.snapshot.movers = MagicMock()
     reststock.snapshot.actives = MagicMock()
-    
+
     reststock.historical = MagicMock()
     reststock.historical.stats = MagicMock()
-    
+
     return reststock
 
 
@@ -115,32 +105,20 @@ def sample_order_data():
         "market_type": "Common",
         "price_type": "Limit",
         "time_in_force": "ROD",
-        "order_type": "Stock"
+        "order_type": "Stock",
     }
 
 
 @pytest.fixture
 def sample_account_data():
     """Sample account data for testing."""
-    return {
-        "account": "12345678",
-        "name": "Test Account",
-        "branch_no": "123",
-        "account_type": "Stock"
-    }
+    return {"account": "12345678", "name": "Test Account", "branch_no": "123", "account_type": "Stock"}
 
 
 @pytest.fixture
 def sample_market_data():
     """Sample market data for testing."""
-    return {
-        "symbol": "2330",
-        "market": "TSE",
-        "price": 500.0,
-        "volume": 1000000,
-        "change": 5.0,
-        "change_percent": 1.0
-    }
+    return {"symbol": "2330", "market": "TSE", "price": 500.0, "volume": 1000000, "change": 5.0, "change_percent": 1.0}
 
 
 # Custom pytest markers

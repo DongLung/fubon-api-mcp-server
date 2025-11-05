@@ -45,13 +45,16 @@ except ImportError:
 
 __author__ = "Jimmy Cui"
 
+
 # 延遲載入以避免循環導入和 runpy 警告
 def __getattr__(name: str) -> "Any":
     """延遲載入模組屬性以避免 python -m 執行時的警告"""
     if name in __all__:
         from . import server
+
         return getattr(server, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 # 定義包的公開介面
 __all__ = [

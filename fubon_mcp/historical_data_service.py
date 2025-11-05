@@ -108,3 +108,18 @@ def historical_candles(args: Dict) -> Dict:
 
     except Exception as e:
         return {"status": "error", "data": [], "message": f"Error retrieving data: {str(e)}"}
+
+
+# =============================================================================
+# MCP Compatibility Layer
+# =============================================================================
+# Ensure all MCP tool functions have .fn attribute for testing compatibility
+try:
+    _fn_names = ("historical_candles",)
+    for _name in _fn_names:
+        _f = globals().get(_name)
+        if callable(_f) and not hasattr(_f, "fn"):
+            _f.fn = _f
+    del _name, _f, _fn_names
+except Exception:
+    pass

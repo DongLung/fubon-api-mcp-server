@@ -22,7 +22,7 @@ class TestPackageBasics:
     def test_package_imports(self):
         """Test that main package components can be imported."""
         # Test main imports
-        from fubon_mcp import mcp, main
+        from fubon_mcp import main, mcp
 
         assert mcp is not None
         assert callable(main)
@@ -31,31 +31,31 @@ class TestPackageBasics:
         """Test that config module can be imported."""
         from fubon_mcp import config
 
-        assert hasattr(config, 'mcp')
-        assert hasattr(config, 'BASE_DATA_DIR')
+        assert hasattr(config, "mcp")
+        assert hasattr(config, "BASE_DATA_DIR")
 
     def test_models_import(self):
         """Test that models module can be imported."""
         from fubon_mcp import models
 
         # Test that key models exist
-        assert hasattr(models, 'PlaceOrderArgs')
-        assert hasattr(models, 'GetAccountInfoArgs')
+        assert hasattr(models, "PlaceOrderArgs")
+        assert hasattr(models, "GetAccountInfoArgs")
 
     def test_utils_import(self):
         """Test that utils module can be imported."""
         from fubon_mcp import utils
 
-        assert hasattr(utils, 'handle_exceptions')
-        assert hasattr(utils, 'validate_and_get_account')
+        assert hasattr(utils, "handle_exceptions")
+        assert hasattr(utils, "validate_and_get_account")
 
     def test_services_import(self):
         """Test that service modules can be imported."""
         services = [
-            'fubon_mcp.account_service',
-            'fubon_mcp.trading_service',
-            'fubon_mcp.market_data_service',
-            'fubon_mcp.reports_service'
+            "fubon_mcp.account_service",
+            "fubon_mcp.trading_service",
+            "fubon_mcp.market_data_service",
+            "fubon_mcp.reports_service",
         ]
 
         for service in services:
@@ -71,11 +71,11 @@ class TestPackageIntegration:
     def test_callable_functions_exist(self):
         """Test that all callable wrapper functions exist."""
         from fubon_mcp import (
+            callable_cancel_order,
             callable_get_account_info,
-            callable_get_inventory,
             callable_get_bank_balance,
+            callable_get_inventory,
             callable_place_order,
-            callable_cancel_order
         )
 
         # Test that they are callable
@@ -93,4 +93,4 @@ class TestPackageIntegration:
         assert mcp is not None
 
         # Should have tool registration capability
-        assert hasattr(mcp, 'tool')
+        assert hasattr(mcp, "tool")
