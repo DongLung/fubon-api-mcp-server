@@ -24,7 +24,7 @@ class Config:
             self.DEFAULT_DATA_DIR = Path.home() / "Library" / "Application Support" / "fubon-mcp" / "data"
         else:  # Linux and other Unix-like systems
             self.DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "fubon-mcp" / "data"
-        
+
         self.BASE_DATA_DIR = Path(os.getenv("FUBON_DATA_DIR", self.DEFAULT_DATA_DIR))
 
         # Ensure data directory exists

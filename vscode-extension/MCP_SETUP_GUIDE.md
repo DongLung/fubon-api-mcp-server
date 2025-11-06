@@ -96,6 +96,8 @@ VS Code 需要在特定位置的配置檔案中註冊 MCP Server。
 4. 依序輸入帳號、憑證路徑等資訊
 5. 重新載入 VS Code
 
+> 必做：首次設定時請至少執行一次「Configure Fubon MCP Server」，此步驟會將伺服器與工具正確註冊給 Copilot Chat。若未執行，`@fubon-api` 可能無法顯示可用工具或無法呼叫。
+
 ### 步驟 5: 重新啟動 VS Code
 
 配置完成後,必須完全重新啟動 VS Code (不是重新載入視窗):

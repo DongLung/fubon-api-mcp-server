@@ -66,6 +66,8 @@ pip install fubon-api-mcp-server
 - **Fubon Mcp: Data Dir**: 本地數據儲存目錄 (選填)
 - **Fubon Mcp: Auto Start**: VS Code 啟動時自動啟動 server (選填)
 
+> 重要：首次使用請在命令面板執行一次「Fubon MCP: Configure」（或「Configure Fubon MCP Server」）。未執行此步驟，Copilot Chat 可能無法於 MCP Server 中註冊工具，導致 `@fubon-api` 工具清單不可用或無法被呼叫。
+
 ### 4. 啟動 Server
 
 按 `Ctrl+Shift+P` (或 `Cmd+Shift+P`) 打開命令面板，輸入：

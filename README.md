@@ -15,7 +15,158 @@
 - ✅ **買賣下單**：支援所有Order參數（market_type、price_type、time_in_force、order_type、user_def）
 - ✅ **委託管理**：查詢委託狀態、修改價格/數量、取消委託
 - ✅ **批量下單**：並行處理多筆訂單，支援ThreadPoolExecutor
+- ✅ **條件單**：單一/多條件單、停損停利（TPSL with OCO）
+
+#### 當沖條件單（Day-Trade Condition）
+
+支援「當沖單一條件單」：觸發主單後，於指定時間前自動回補，可選擇加入停損停利（OCO）。
+
+重要注意事項：
+- 停損利設定僅為觸發送單，不保證必定回補成功，需視市場狀況調整
+- 停損利委託類別需符合當日沖銷交易規則（例如信用交易使用資券互抵）
+- 主單完全成交後，停損停利才會啟動
+
+使用（MCP tool `place_daytrade_condition_order`）：
+
+```python
+from fubon_api_mcp_server.server import place_daytrade_condition_order
+
+result = place_daytrade_condition_order({
+    "account": "1234567",
+    "stop_sign": "Full",
+    "end_time": "130000",  # 父單洗價結束時間
+    "condition": {
+        "market_type": "Reference",
+        "symbol": "2881",
+        "trigger": "MatchedPrice",
+        "trigger_value": "66",
+        "comparison": "LessThan"
+    },
+    "order": {
+        "buy_sell": "Buy",
+        "symbol": "2881",
+        "price": "66",
+        "quantity": 1000,
+        "market_type": "Common",
+        "price_type": "Limit",
+        "time_in_force": "ROD",
+        "order_type": "Stock"
+    },
+    "daytrade": {
+        "day_trade_end_time": "131500",  # 130100 ~ 132000
+        "auto_cancel": True,
+        "price": "",
+        "price_type": "Market"
+    },
+    "tpsl": {  # 選填
+        "stop_sign": "Full",
+        "tp": {"time_in_force": "ROD", "price_type": "Limit", "order_type": "Stock", "target_price": "85", "price": "85"},
+        "sl": {"time_in_force": "ROD", "price_type": "Limit", "order_type": "Stock", "target_price": "60", "price": "60"},
+        "end_date": "20240517",
+        "intraday": True
+    },
+    "fix_session": True
+})
+```
+
+回傳：`{"status":"success","data":{"guid":"..."},...}`，`guid` 為條件單號。
+
+查詢當沖條件單（依 guid）：
+
+```python
+from fubon_api_mcp_server.server import get_daytrade_condition_by_id
+
+res = get_daytrade_condition_by_id({
+    "account": "1234567",
+    "guid": "8ff3472b-185a-488c-be5a-b478deda080c"
+})
+
+if res["status"] == "success":
+    detail = res["data"]  # 包含 guid、status、detail_records、tpslRecord 等欄位
+```
+
+當沖多條件單（multi_condition_day_trade）：
+
+```python
+from fubon_api_mcp_server.server import place_daytrade_multi_condition_order
+
+payload = {
+    "account": "1234567",
+    "stop_sign": "Full",
+    "end_time": "130000",
+    "conditions": [
+        {"market_type": "Reference", "symbol": "2881", "trigger": "MatchedPrice", "trigger_value": "66", "comparison": "LessThan"},
+        {"market_type": "Reference", "symbol": "2881", "trigger": "TotalQuantity", "trigger_value": "8000", "comparison": "LessThan"}
+    ],
+    "order": {"buy_sell": "Buy", "symbol": "2881", "price": "66", "quantity": 1000, "market_type": "Common", "price_type": "Limit", "time_in_force": "ROD", "order_type": "Stock"},
+    "daytrade": {"day_trade_end_time": "131500", "auto_cancel": True, "price": "", "price_type": "Market"},
+    "tpsl": {"stop_sign": "Full", "tp": {"time_in_force": "ROD", "price_type": "Limit", "order_type": "Stock", "target_price": "85", "price": "85"}, "sl": {"time_in_force": "ROD", "price_type": "Limit", "order_type": "Stock", "target_price": "60", "price": "60"}, "end_date": "20240517", "intraday": True},
+    "fix_session": True
+}
+
+res = place_daytrade_multi_condition_order(payload)
+```
+
+移動鎖利條件單（trail_profit）：
+
+```python
+from fubon_api_mcp_server.server import place_trail_profit
+
+res = place_trail_profit({
+    "account": "1234567",
+    "start_date": "20240427",
+    "end_date": "20240516",
+    "stop_sign": "Full",
+    "trail": {
+        "symbol": "2330",
+        "price": "860",          # 基準價（至多小數兩位）
+        "direction": "Up",        # Up / Down
+        "percentage": 5,
+        "buy_sell": "Buy",
+        "quantity": 2000,
+        "price_type": "MatchedPrice",
+        "diff": 5,
+        "time_in_force": "ROD",
+        "order_type": "Stock"
+    }
+})
+```
+
+注意：TrailOrder 基準價 `price` 只可輸入至多小數點後兩位，超出可能造成洗價失敗（本工具已做基本檢核）。
+
+查詢有效移動鎖利（get_trail_order）：
+
+```python
+from fubon_api_mcp_server.server import get_trail_order
+
+res = get_trail_order({
+    "account": "1234567"
+})
+
+if res["status"] == "success":
+    trails = res["data"]  # List[ConditionDetail]，已展開為 dict
+```
 - ✅ **非阻塞模式**：同步/非同步下單操作
+
+## 參數對照表（重點）
+
+- ConditionArgs
+    - market_type: Reference, Scheduled
+    - trigger: BidPrice, AskPrice, MatchedPrice, TotalQuantity, Time
+    - comparison: LessThan, LessThanOrEqual, Equal, GreaterThan, GreaterThanOrEqual
+- ConditionOrderArgs
+    - market_type: Common, Emg, Odd
+    - price_type: Limit, Market, LimitUp, LimitDown
+    - time_in_force: ROD, IOC, FOK
+    - order_type: Stock, Margin, Short, DayTrade
+- TimeSliceSplitArgs（分時分量）
+    - method: Type1, Type2, Type3（Type2/Type3 需提供 `end_time`）
+    - interval: 正整數（秒）
+    - single_quantity: 正整數（股）
+    - total_quantity: 選填（股，若提供需大於 single_quantity）
+- StopSign: Full, Partial, UntilEnd
+
+以上皆對應 `fubon_neo.constant` 之列舉，傳入時請使用成員名稱（字串）。
 
 ### 📊 市場數據
 - ✅ **即時行情**：盤中報價、K線、成交明細、分價量表
@@ -205,6 +356,8 @@ python server.py
 
 ### 交易功能
 
+> 注意：條件單目前不支援期權商品與現貨商品混用。
+
 #### 下單買賣股票
 
 ```python
@@ -287,6 +440,238 @@ result = cancel_order({
     "account": "帳戶號碼",
     "order_no": "委託單號"
 })
+```
+
+#### 單一條件單
+
+單一條件單使用富邦官方 `single_condition` API，當觸發條件達成時自動送出委託單。
+
+```python
+from mcp_fubon import place_condition_order
+
+result = place_condition_order({
+    "account": "帳戶號碼",
+    "start_date": "20240427",      # 開始日期 YYYYMMDD
+    "end_date": "20240516",        # 結束日期 YYYYMMDD
+    "stop_sign": "Full",           # Full(全部成交), Partial(部分成交), UntilEnd(效期結束)
+    
+    # 觸發條件
+    "condition": {
+        "market_type": "Reference",     # Reference(參考價) 或 LastPrice(最新價)
+        "symbol": "2881",               # 股票代碼
+        "trigger": "MatchedPrice",      # MatchedPrice(成交價), BuyPrice(買價), SellPrice(賣價)
+        "trigger_value": "80",          # 觸發值
+        "comparison": "LessThan"        # LessThan(<), LessOrEqual(<=), Equal(=), Greater(>), GreaterOrEqual(>=)
+    },
+    
+    # 委託單參數
+    "order": {
+        "buy_sell": "Sell",             # Buy 或 Sell
+        "symbol": "2881",
+        "price": "60",
+        "quantity": 1000,
+        "market_type": "Common",        # Common, Emg, Odd
+        "price_type": "Limit",          # Limit, Market, LimitUp, LimitDown
+        "time_in_force": "ROD",         # ROD, IOC, FOK
+        "order_type": "Stock"           # Stock, Margin, Short, DayTrade
+    }
+})
+# 返回: {"status": "success", "data": {"guid": "條件單號", ...}}
+```
+
+**單一條件單參數說明**:
+- `stop_sign`: 條件停止條件
+  - `Full`: 全部成交為止（預設）
+  - `Partial`: 部分成交為止
+  - `UntilEnd`: 效期結束為止
+- `condition`: 觸發條件，當條件達成時觸發委託單
+- `order`: 觸發後的委託單內容
+
+#### 停損停利條件單（TPSL）
+
+停損停利單使用相同的 `single_condition` API，在單一條件單基礎上加入選填的 `tpsl` 參數。
+
+**⚠️ 停損停利重要注意事項**（來自富邦官方文檔）：
+- 停損停利設定**僅為觸發送單**，不保證必定成交，需視市場狀況自行調整
+- 請確認停損停利委託類別設定需符合適合之交易規則（例如信用交易資買資賣等）
+- **待主單完全成交後，停損停利部分才會啟動**
+- 當停利條件達成時停損失效，反之亦然（OCO機制）
+
+```python
+# 建議使用 place_condition_order 並提供 tpsl 參數
+from mcp_fubon import place_condition_order
+
+result = place_condition_order({
+    "account": "帳戶號碼",
+    "start_date": "20240426",      # 開始日期 YYYYMMDD
+    "end_date": "20240430",        # 結束日期 YYYYMMDD
+    "stop_sign": "Full",           # Full(全部) 或 Flat(減碼)
+    
+    # 觸發條件
+    "condition": {
+        "market_type": "Reference",     # Reference(參考價) 或 LastPrice(最新價)
+        "symbol": "2881",               # 股票代碼
+        "trigger": "MatchedPrice",      # MatchedPrice(成交價), BuyPrice(買價), SellPrice(賣價)
+        "trigger_value": "66",          # 觸發值
+        "comparison": "LessThan"        # LessThan(<), LessOrEqual(<=), Equal(=), Greater(>), GreaterOrEqual(>=)
+    },
+    
+    # 委託單參數
+    "order": {
+        "buy_sell": "Buy",              # Buy 或 Sell
+        "symbol": "2881",
+        "price": "66",
+        "quantity": 1000,
+        "market_type": "Common",        # Common, Emg, Odd
+        "price_type": "Limit",          # Limit, Market, LimitUp, LimitDown
+        "time_in_force": "ROD",         # ROD, IOC, FOK
+        "order_type": "Stock"           # Stock, Margin, Short, DayTrade
+    },
+    
+    # 停損停利參數
+    "tpsl": {
+        "stop_sign": "Full",
+        # 停利單（選填）
+        "tp": {
+            "time_in_force": "ROD",
+            "price_type": "Limit",
+            "order_type": "Stock",
+            "target_price": "85",       # 停利觸發價
+            "price": "85",              # 停利委託價（Market則填""）
+            "trigger": "MatchedPrice"   # 觸發內容
+        },
+        # 停損單（選填）
+        "sl": {
+            "time_in_force": "ROD",
+            "price_type": "Limit",
+            "order_type": "Stock",
+            "target_price": "60",       # 停損觸發價
+            "price": "60",              # 停損委託價（Market則填""）
+            "trigger": "MatchedPrice"
+        },
+        "end_date": "20240517",         # 停損停利結束日期 YYYYMMDD（選填）
+        "intraday": False               # 是否當日有效（選填）
+    }
+})
+```
+
+**停損停利單參數說明**:
+- `tpsl`: 停損停利參數（選填，但若提供則tp或sl至少要有一個）
+  - `tp`: 停利單設定（選填），達到目標價格後賣出獲利
+  - `sl`: 停損單設定（選填），跌破價格後賣出止損
+  - `end_date`: 停損停利結束日期（選填）
+  - `intraday`: 是否當日有效（選填）
+- **OCO機制**: 停利或停損任一觸發後，另一個自動失效
+- **觸發順序**: 先觸發主單條件 → 主單完全成交 → 啟動停損停利監控
+
+**使用提醒**:
+- 停損停利設定僅為觸發送單，**不保證成交**
+- Market 價格類型時，price 參數填空值 `""`
+- 條件單目前不支援期權商品與現貨商品混用
+
+**便捷方法**（與上述功能完全相同）:
+```python
+from mcp_fubon import place_tpsl_condition_order
+result = place_tpsl_condition_order({...})  # 參數同上
+```
+
+#### 多條件單（Multi-Condition）
+
+多條件單使用富邦官方 `multi_condition` API，支援設定**多個觸發條件**，當**所有條件都達成**時才送出委託單。
+
+**使用場景**：
+- 價格 AND 成交量條件
+- 多檔股票同時觸發
+- 複合技術指標條件
+
+**⚠️ 重要提醒**：
+- **所有條件必須同時滿足**才會觸發委託單
+- 其他注意事項與單一條件單相同
+
+```python
+from mcp_fubon import place_multi_condition_order
+
+result = place_multi_condition_order({
+    "account": "帳戶號碼",
+    "start_date": "20240426",
+    "end_date": "20240430",
+    "stop_sign": "Full",
+    
+    # 多個觸發條件（全部須滿足）
+    "conditions": [
+        {
+            "market_type": "Reference",
+            "symbol": "2881",
+            "trigger": "MatchedPrice",      # 成交價
+            "trigger_value": "66",
+            "comparison": "LessThan"        # < 66
+        },
+        {
+            "market_type": "Reference",
+            "symbol": "2881",
+            "trigger": "TotalQuantity",     # 總量
+            "trigger_value": "8000",
+            "comparison": "LessThan"        # < 8000
+        }
+    ],
+    
+    # 委託單參數
+    "order": {
+        "buy_sell": "Buy",
+        "symbol": "2881",
+        "price": "66",
+        "quantity": 1000,
+        "market_type": "Common",
+        "price_type": "Limit",
+        "time_in_force": "ROD",
+        "order_type": "Stock"
+    },
+    
+    # 停損停利參數（選填）
+    "tpsl": {
+        "tp": {
+            "time_in_force": "ROD",
+            "price_type": "Limit",
+            "order_type": "Stock",
+            "target_price": "85",
+            "price": "85"
+        },
+        "sl": {
+            "time_in_force": "ROD",
+            "price_type": "Limit",
+            "order_type": "Stock",
+            "target_price": "60",
+            "price": "60"
+        },
+        "end_date": "20240517"
+    }
+})
+```
+
+**多條件單參數說明**:
+- `conditions`: **條件列表**（所有條件必須同時滿足）
+  - 支援的觸發內容 (`trigger`):
+    - `MatchedPrice`: 成交價
+    - `BuyPrice`: 買價
+    - `SellPrice`: 賣價
+    - `TotalQuantity`: 總量
+  - 每個條件可設定不同的股票、觸發內容和比較運算子
+- `order`: 當所有條件達成後的委託單內容
+- `tpsl`: 停損停利參數（選填）
+
+**範例場景**:
+```python
+# 場景 1: 價格跌破且成交量放大時買入
+"conditions": [
+    {"symbol": "2330", "trigger": "MatchedPrice", "trigger_value": "500", "comparison": "LessThan"},
+    {"symbol": "2330", "trigger": "TotalQuantity", "trigger_value": "10000", "comparison": "Greater"}
+]
+
+# 場景 2: 兩檔股票同時觸發
+"conditions": [
+    {"symbol": "2330", "trigger": "MatchedPrice", "trigger_value": "550", "comparison": "Greater"},
+    {"symbol": "2881", "trigger": "MatchedPrice", "trigger_value": "70", "comparison": "Greater"}
+]
 ```
 
 ### 帳戶資訊

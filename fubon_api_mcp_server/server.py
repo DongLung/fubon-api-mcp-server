@@ -45,7 +45,24 @@ sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import pandas as pd
 from dotenv import load_dotenv
-from fubon_neo.sdk import FubonSDK
+from fubon_neo.constant import (
+    ConditionMarketType,
+    ConditionOrderType,
+    ConditionPriceType,
+    ConditionStatus,
+    Direction,
+    HistoryStatus,
+    Operator,
+    SplitDescription,
+    StopSign,
+    TimeSliceOrderType,
+    TPSLOrder,
+    TPSLWrapper,
+    TradingType,
+    TrailOrder,
+    TriggerContent,
+)
+from fubon_neo.sdk import Condition, ConditionDayTrade, ConditionOrder, FubonSDK
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
@@ -600,6 +617,241 @@ class BatchPlaceOrderArgs(BaseModel):
     max_workers: int = 10  # 最大並行數量
 
 
+class TPSLOrderArgs(BaseModel):
+    """停損停利單參數模型"""
+
+    time_in_force: str = "ROD"  # ROD, IOC, FOK
+    price_type: str = "Limit"  # Limit, Market
+    order_type: str = "Stock"  # Stock, Margin, Short, DayTrade
+    target_price: str  # 觸發價格
+    price: str  # 委託價格，若為市價則填空值""
+    trigger: Optional[str] = "MatchedPrice"  # v2.2.0+ 觸發內容，預設為成交價
+
+
+class TPSLWrapperArgs(BaseModel):
+    """停損停利包裝器參數模型"""
+
+    stop_sign: str = "Full"  # Full(全部), Flat(減碼)
+    tp: Optional[Dict] = None  # 停利單參數（TPSLOrderArgs）
+    sl: Optional[Dict] = None  # 停損單參數（TPSLOrderArgs）
+    end_date: Optional[str] = None  # 結束日期 YYYYMMDD（選填）
+    intraday: Optional[bool] = False  # 是否為當日有效（選填）
+
+
+class ConditionArgs(BaseModel):
+    """條件單觸發條件參數模型"""
+
+    market_type: str = "Reference"  # 對應 ConditionMarketType：Reference, Scheduled
+    symbol: str  # 股票代碼
+    trigger: str = (
+        "MatchedPrice"  # 觸發內容：BidPrice(買價), AskPrice(賣價), MatchedPrice(成交價), TotalQuantity(累計成交量), Time(時間)
+    )
+    trigger_value: str  # 觸發值
+    comparison: str = (
+        "LessThan"  # 比較運算子：LessThan(<), LessThanOrEqual(<=), Equal(=), GreaterThan(>), GreaterThanOrEqual(>=)
+    )
+
+
+class ConditionOrderArgs(BaseModel):
+    """條件委託單參數模型"""
+
+    buy_sell: str  # Buy, Sell
+    symbol: str  # 股票代碼
+    price: str  # 委託價格
+    quantity: int  # 委託數量（股）
+    market_type: str = "Common"  # Common(一般), Emg(緊急), Odd(盤後零股)
+    price_type: str = "Limit"  # Limit, Market, LimitUp, LimitDown
+    time_in_force: str = "ROD"  # ROD, IOC, FOK
+    order_type: str = "Stock"  # Stock, Margin, Short, DayTrade
+
+
+class PlaceConditionOrderArgs(BaseModel):
+    """單一條件單參數模型（可選停損停利）"""
+
+    account: str  # 帳戶號碼
+    start_date: str  # 開始日期 YYYYMMDD
+    end_date: str  # 結束日期 YYYYMMDD
+    stop_sign: str = "Full"  # Full(全部成交), Partial(部分成交), UntilEnd(效期結束)
+    condition: Dict  # 條件參數（ConditionArgs）
+    order: Dict  # 委託單參數（ConditionOrderArgs）
+    tpsl: Optional[Dict] = None  # 停損停利參數（TPSLWrapperArgs，選填）
+
+
+class PlaceMultiConditionOrderArgs(BaseModel):
+    """多條件單參數模型（可選停損停利）"""
+
+    account: str  # 帳戶號碼
+    start_date: str  # 開始日期 YYYYMMDD
+    end_date: str  # 結束日期 YYYYMMDD
+    stop_sign: str = "Full"  # Full(全部成交), Partial(部分成交), UntilEnd(效期結束)
+    conditions: List[Dict]  # 多個條件參數（List of ConditionArgs）
+    order: Dict  # 委託單參數（ConditionOrderArgs）
+    tpsl: Optional[Dict] = None  # 停損停利參數（TPSLWrapperArgs，選填）
+
+
+class TrailOrderArgs(BaseModel):
+    """移動鎖利 TrailOrder 參數模型"""
+
+    symbol: str
+    price: str  # 基準價，至多小數兩位
+    direction: str  # Up 或 Down
+    percentage: float  # 漲跌百分比
+    buy_sell: str  # Buy 或 Sell
+    quantity: int
+    price_type: str = "MatchedPrice"
+    diff: int  # 追價 tick 數（向下為負值）
+    time_in_force: str = "ROD"
+    order_type: str = "Stock"
+
+    @classmethod
+    def _validate_two_decimals(cls, value: str) -> str:
+        if value is None:
+            return value
+        if "." in value:
+            frac = value.split(".", 1)[1]
+            if len(frac) > 2:
+                raise ValueError("TrailOrder.price 只可至多小數點後兩位")
+        return value
+
+    def model_post_init(self, __context):
+        # 執行 price 小數位數檢核
+        self.price = self._validate_two_decimals(self.price)
+
+
+class GetTrailOrderArgs(BaseModel):
+    """有效移動鎖利查詢參數"""
+
+    account: str
+
+
+class GetTrailHistoryArgs(BaseModel):
+    """歷史移動鎖利查詢參數"""
+
+    account: str
+    start_date: str
+    end_date: str
+
+
+class TimeSliceSplitArgs(BaseModel):
+    """分時分量拆單設定參數 (SplitDescription)"""
+
+    method: str  # TimeSliceOrderType 成員名稱，例如 Type1/Type2/Type3
+    interval: int  # 間隔秒數 (>0)
+    single_quantity: int  # 每次委託張數（股數，>0）
+    total_quantity: Optional[int] = None  # 總委託張數（股數，選填）
+    start_time: str  # 開始時間，格式如 '083000'
+    end_time: Optional[str] = None  # 結束時間，Type2/Type3 必填
+
+    def model_post_init(self, __context):
+        # 基本檢核
+        if self.interval is None or self.interval <= 0:
+            raise ValueError("interval 必須為正整數")
+        if self.single_quantity is None or self.single_quantity <= 0:
+            raise ValueError("single_quantity 必須為正整數")
+        if self.total_quantity is not None and self.total_quantity <= self.single_quantity:
+            raise ValueError("total_quantity 必須大於 single_quantity")
+        # 針對 method 類型的檢核
+        try:
+            from fubon_neo.constant import TimeSliceOrderType as _TS
+
+            m = getattr(_TS, self.method)
+        except Exception:
+            raise ValueError("method 無效，必須是 TimeSliceOrderType 的成員名稱")
+        if m in (_TS.Type2, _TS.Type3):
+            if not self.end_time:
+                raise ValueError("Type2/Type3 必須提供 end_time")
+
+
+class PlaceTimeSliceOrderArgs(BaseModel):
+    """分時分量條件單請求參數"""
+
+    account: str
+    start_date: str
+    end_date: str
+    stop_sign: str = "Full"  # Full, Partial, UntilEnd
+    split: Dict  # TimeSliceSplitArgs
+    order: Dict  # ConditionOrderArgs
+
+
+class GetTimeSliceOrderArgs(BaseModel):
+    """分時分量查詢參數"""
+
+    account: str
+    batch_no: str
+
+
+class CancelConditionOrderArgs(BaseModel):
+    """取消條件單參數"""
+
+    account: str
+    guid: str
+
+
+class GetConditionOrderArgs(BaseModel):
+    """條件單查詢參數"""
+
+    account: str
+    condition_status: Optional[str] = None  # 對應 ConditionStatus，選填
+
+
+class GetConditionOrderByIdArgs(BaseModel):
+    """條件單查詢（By Guid）參數"""
+
+    account: str
+    guid: str
+
+
+class GetConditionHistoryArgs(BaseModel):
+    """歷史條件單查詢參數"""
+
+    account: str
+    start_date: str
+    end_date: str
+    condition_history_status: Optional[str] = None  # 對應 HistoryStatus，選填
+
+
+class ConditionDayTradeArgs(BaseModel):
+    """當沖回補參數模型 (ConditionDayTrade)"""
+
+    day_trade_end_time: str  # 收盤前沖銷時間，區間 130100 ~ 132000
+    auto_cancel: bool = True  # 是否自動取消
+    price: str = ""  # 定盤/沖銷價格，市價時請留空字串
+    price_type: str = "Market"  # Market 或 Limit（對應 ConditionPriceType）
+
+
+class PlaceDayTradeConditionOrderArgs(BaseModel):
+    """當沖單一條件單參數模型（可選停損停利）"""
+
+    account: str  # 帳戶號碼
+    stop_sign: str = "Full"  # Full(全部成交), Partial(部分成交), UntilEnd(效期結束)
+    end_time: str  # 父單洗價結束時間（例："130000"）
+    condition: Dict  # 觸發條件（ConditionArgs）
+    order: Dict  # 主單委託內容（ConditionOrderArgs）
+    daytrade: Dict  # 當沖回補內容（ConditionDayTradeArgs）
+    tpsl: Optional[Dict] = None  # 停損停利（TPSLWrapperArgs，選填）
+    fix_session: bool = False  # 是否執行定盤回補（fixSession）
+
+
+class GetDayTradeConditionByIdArgs(BaseModel):
+    """當沖條件單查詢參數"""
+
+    account: str
+    guid: str
+
+
+class PlaceDayTradeMultiConditionOrderArgs(BaseModel):
+    """當沖多條件單參數模型（可選停損停利）"""
+
+    account: str
+    stop_sign: str = "Full"  # Full(全部成交), Partial(部分成交), UntilEnd(效期結束)
+    end_time: str  # 父單洗價結束時間（例："130000"）
+    conditions: List[Dict]  # 多個觸發條件（List of ConditionArgs）
+    order: Dict  # 主單委託內容（ConditionOrderArgs）
+    daytrade: Dict  # 當沖回補內容（ConditionDayTradeArgs）
+    tpsl: Optional[Dict] = None  # 停損停利（TPSLWrapperArgs，選填）
+    fix_session: bool = False  # 是否執行定盤回補
+
+
 @mcp.tool()
 def historical_candles(args: Dict) -> dict:
     """
@@ -1112,7 +1364,11 @@ def get_realtime_quotes(args: Dict) -> dict:
 
         try:
             result = reststock.intraday.quote(symbol=symbol)
-            return {"status": "success", "data": result.dict() if hasattr(result, 'dict') else result, "message": f"成功獲取 {symbol} 即時行情"}
+            return {
+                "status": "success",
+                "data": result.dict() if hasattr(result, "dict") else result,
+                "message": f"成功獲取 {symbol} 即時行情",
+            }
         except FugleAPIError as e:
             return {"status": "error", "data": None, "message": f"API 錯誤: {e}"}
     except Exception as e:
@@ -1182,7 +1438,11 @@ def get_intraday_ticker(args: Dict) -> dict:
         symbol = validated_args.symbol
 
         result = reststock.intraday.ticker(symbol)
-        return {"status": "success", "data": result.dict() if hasattr(result, 'dict') else result, "message": f"成功獲取 {symbol} 基本資料"}
+        return {
+            "status": "success",
+            "data": result.dict() if hasattr(result, "dict") else result,
+            "message": f"成功獲取 {symbol} 基本資料",
+        }
     except Exception as e:
         return {"status": "error", "data": None, "message": f"獲取基本資料失敗: {str(e)}"}
 
@@ -1200,7 +1460,11 @@ def get_intraday_quote(args: Dict) -> dict:
         symbol = validated_args.symbol
 
         result = reststock.intraday.quote(symbol)
-        return {"status": "success", "data": result.dict() if hasattr(result, 'dict') else result, "message": f"成功獲取 {symbol} 即時報價"}
+        return {
+            "status": "success",
+            "data": result.dict() if hasattr(result, "dict") else result,
+            "message": f"成功獲取 {symbol} 即時報價",
+        }
     except Exception as e:
         return {"status": "error", "data": None, "message": f"獲取即時報價失敗: {str(e)}"}
 
@@ -1452,7 +1716,11 @@ def get_historical_stats(args: Dict) -> dict:
         result = reststock.historical.stats(symbol=symbol)
 
         # 檢查返回格式
-        if isinstance(result, dict) and (("week52High" in result) or ("52w_high" in result)) and (("week52Low" in result) or ("52w_low" in result)):
+        if (
+            isinstance(result, dict)
+            and (("week52High" in result) or ("52w_high" in result))
+            and (("week52Low" in result) or ("52w_low" in result))
+        ):
             stats = {
                 "symbol": result.get("symbol"),
                 "name": result.get("name"),
@@ -1808,6 +2076,1506 @@ def batch_place_order(args: Dict) -> dict:
 
     except Exception as e:
         return {"status": "error", "data": None, "message": f"批量下單失敗: {str(e)}"}
+
+
+@mcp.tool()
+def place_condition_order(args: Dict) -> dict:
+    """
+    單一條件單（可選停損停利）
+
+    當觸發條件達成時，自動送出委託單。可選擇性加入停損停利設定。
+    使用富邦官方 single_condition API。
+
+    ⚠️ 重要提醒：
+    - 條件單目前不支援期權商品與現貨商品混用
+    - 停損停利設定僅為觸發送單，不保證必定成交，需視市場狀況調整
+    - 請確認停損停利委託類別設定符合適合之交易規則（例如信用交易資買資賣等）
+    - 待主單完全成交後，停損停利部分才會啟動
+
+    Args:
+        account (str): 帳戶號碼
+        start_date (str): 開始日期，格式: YYYYMMDD (例: "20240426")
+        end_date (str): 結束日期，格式: YYYYMMDD (例: "20240516")
+        stop_sign (str): 條件停止條件
+            - Full: 全部成交為止（預設）
+            - Partial: 部分成交為止
+            - UntilEnd: 效期結束為止
+        condition (dict): 觸發條件
+            - market_type (str): 市場類型，Reference(參考價) 或 LastPrice(最新價)
+            - symbol (str): 股票代碼
+            - trigger (str): 觸發內容，MatchedPrice(成交價), BuyPrice(買價), SellPrice(賣價)
+            - trigger_value (str): 觸發值
+            - comparison (str): 比較運算子，LessThan(<), LessOrEqual(<=), Equal(=), Greater(>), GreaterOrEqual(>=)
+        order (dict): 委託單參數
+            - buy_sell (str): Buy 或 Sell
+            - symbol (str): 股票代碼
+            - price (str): 委託價格
+            - quantity (int): 委託數量（股）
+            - market_type (str): Common, Emg, Odd，預設 "Common"
+            - price_type (str): Limit, Market, LimitUp, LimitDown，預設 "Limit"
+            - time_in_force (str): ROD, IOC, FOK，預設 "ROD"
+            - order_type (str): Stock, Margin, Short, DayTrade，預設 "Stock"
+        tpsl (dict, optional): 停損停利參數（選填）
+            - stop_sign (str): Full 或 Flat，預設 "Full"
+            - tp (dict, optional): 停利單參數
+                - time_in_force (str): ROD, IOC, FOK
+                - price_type (str): Limit 或 Market
+                - order_type (str): Stock, Margin, Short, DayTrade
+                - target_price (str): 觸發價格
+                - price (str): 委託價格（Market則填""）
+                - trigger (str): 觸發內容，預設 "MatchedPrice"
+            - sl (dict, optional): 停損單參數（同tp結構）
+            - end_date (str, optional): 結束日期 YYYYMMDD
+            - intraday (bool, optional): 是否當日有效，預設 False
+
+    Returns:
+        dict: 包含狀態和條件單號的字典
+
+    Example (單一條件單):
+        {
+            "account": "1234567",
+            "start_date": "20240427",
+            "end_date": "20240516",
+            "stop_sign": "Full",
+            "condition": {
+                "market_type": "Reference",
+                "symbol": "2881",
+                "trigger": "MatchedPrice",
+                "trigger_value": "80",
+                "comparison": "LessThan"
+            },
+            "order": {
+                "buy_sell": "Sell",
+                "symbol": "2881",
+                "price": "60",
+                "quantity": 1000
+            }
+        }
+
+    Example (含停損停利):
+        {
+            "account": "1234567",
+            "start_date": "20240426",
+            "end_date": "20240430",
+            "condition": {...},
+            "order": {...},
+            "tpsl": {
+                "stop_sign": "Full",
+                "tp": {
+                    "time_in_force": "ROD",
+                    "price_type": "Limit",
+                    "order_type": "Stock",
+                    "target_price": "85",
+                    "price": "85"
+                },
+                "sl": {
+                    "time_in_force": "ROD",
+                    "price_type": "Limit",
+                    "order_type": "Stock",
+                    "target_price": "60",
+                    "price": "60"
+                },
+                "end_date": "20240517",
+                "intraday": False
+            }
+        }
+    """
+    try:
+        from fubon_neo.constant import BSAction, TimeInForce
+
+        # 驗證主要參數
+        validated_args = PlaceConditionOrderArgs(**args)
+        account = validated_args.account
+        start_date = validated_args.start_date
+        end_date = validated_args.end_date
+        stop_sign = validated_args.stop_sign
+
+        # 驗證帳戶
+        account_obj, error = validate_and_get_account(account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 建立條件對象
+        condition_data = ConditionArgs(**validated_args.condition)
+        condition = Condition(
+            market_type=getattr(TradingType, condition_data.market_type),
+            symbol=condition_data.symbol,
+            trigger=getattr(TriggerContent, condition_data.trigger),
+            trigger_value=condition_data.trigger_value,
+            comparison=getattr(Operator, condition_data.comparison),
+        )
+
+        # 建立委託單對象
+        order_data = ConditionOrderArgs(**validated_args.order)
+        order = ConditionOrder(
+            buy_sell=getattr(BSAction, order_data.buy_sell),
+            symbol=order_data.symbol,
+            price=order_data.price,
+            quantity=order_data.quantity,
+            market_type=getattr(ConditionMarketType, order_data.market_type),
+            price_type=getattr(ConditionPriceType, order_data.price_type),
+            time_in_force=getattr(TimeInForce, order_data.time_in_force),
+            order_type=getattr(ConditionOrderType, order_data.order_type),
+        )
+
+        # 建立停損停利對象（如果有提供）
+        tpsl = None
+        if validated_args.tpsl:
+            tpsl_data = TPSLWrapperArgs(**validated_args.tpsl)
+
+            # 建立停利單（如果有）
+            tp = None
+            if tpsl_data.tp:
+                tp_data = TPSLOrderArgs(**tpsl_data.tp)
+                tp = TPSLOrder(
+                    time_in_force=getattr(TimeInForce, tp_data.time_in_force),
+                    price_type=getattr(ConditionPriceType, tp_data.price_type),
+                    order_type=getattr(ConditionOrderType, tp_data.order_type),
+                    target_price=tp_data.target_price,
+                    price=tp_data.price,
+                    trigger=getattr(TriggerContent, tp_data.trigger) if tp_data.trigger else TriggerContent.MatchedPrice,
+                )
+
+            # 建立停損單（如果有）
+            sl = None
+            if tpsl_data.sl:
+                sl_data = TPSLOrderArgs(**tpsl_data.sl)
+                sl = TPSLOrder(
+                    time_in_force=getattr(TimeInForce, sl_data.time_in_force),
+                    price_type=getattr(ConditionPriceType, sl_data.price_type),
+                    order_type=getattr(ConditionOrderType, sl_data.order_type),
+                    target_price=sl_data.target_price,
+                    price=sl_data.price,
+                    trigger=getattr(TriggerContent, sl_data.trigger) if sl_data.trigger else TriggerContent.MatchedPrice,
+                )
+
+            # 建立停損停利包裝器
+            tpsl = TPSLWrapper(
+                stop_sign=getattr(StopSign, tpsl_data.stop_sign),
+                tp=tp,
+                sl=sl,
+                end_date=tpsl_data.end_date,
+                intraday=tpsl_data.intraday,
+            )
+
+        # 執行條件單下單（使用 single_condition API）
+        result = sdk.stock.single_condition(
+            account_obj,
+            start_date,
+            end_date,
+            getattr(StopSign, stop_sign),
+            condition,
+            order,
+            tpsl,  # 停損停利參數（可為 None）
+        )
+
+        # 檢查結果
+        if result and hasattr(result, "is_success") and result.is_success:
+            guid = getattr(result.data, "guid", None) if hasattr(result, "data") else None
+            response_data = {
+                "guid": guid,
+                "condition_no": guid,  # 條件單號
+                "symbol": order_data.symbol,
+                "buy_sell": order_data.buy_sell,
+                "quantity": order_data.quantity,
+                "trigger_value": condition_data.trigger_value,
+                "trigger_comparison": condition_data.comparison,
+            }
+
+            # 如果有停損停利，加入相關資訊
+            if validated_args.tpsl:
+                tpsl_info = validated_args.tpsl
+                if tpsl_info.get("tp"):
+                    response_data["tp_target"] = tpsl_info["tp"]["target_price"]
+                if tpsl_info.get("sl"):
+                    response_data["sl_target"] = tpsl_info["sl"]["target_price"]
+                response_data["has_tpsl"] = True
+            else:
+                response_data["has_tpsl"] = False
+
+            message = f"條件單已成功建立 - {order_data.symbol}"
+            if response_data.get("has_tpsl"):
+                message += " (含停損停利)"
+
+            return {
+                "status": "success",
+                "data": response_data,
+                "message": message,
+            }
+        else:
+            error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+            return {"status": "error", "message": f"條件單建立失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"條件單建立時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def place_tpsl_condition_order(args: Dict) -> dict:
+    """
+    停損停利條件單（便捷方法）
+
+    這是 place_condition_order 的便捷包裝，專門用於建立含停損停利的條件單。
+    內部調用相同的 single_condition API。
+
+    當觸發條件達成並成交後，自動啟動停損停利監控機制。
+    當停利條件達成時停損失效，反之亦然（OCO機制）。
+
+    ⚠️ 重要提醒：
+    - 條件單目前不支援期權商品與現貨商品混用
+    - 停損停利設定僅為觸發送單，不保證必定成交
+    - 請確認停損停利委託類別設定符合交易規則
+    - 待主單完全成交後，停損停利部分才會啟動
+
+    Args: 與 place_condition_order 相同，但 tpsl 為必填
+
+    Returns:
+        dict: 包含狀態和訂單資訊的字典
+
+    Note:
+        此方法為便捷包裝，實際功能與 place_condition_order(含tpsl參數) 相同。
+        建議直接使用 place_condition_order 並視需要提供 tpsl 參數。
+    """
+    # 直接調用 place_condition_order
+    # 此方法保留是為了向後兼容和語義清晰
+    return place_condition_order(args)
+
+
+@mcp.tool()
+def place_multi_condition_order(args: Dict) -> dict:
+    """
+    多條件單（可選停損停利）
+
+    支援設定多個觸發條件，當所有條件都達成時才送出委託單。
+    使用富邦官方 multi_condition API。
+
+    ⚠️ 重要提醒：
+    - 條件單目前不支援期權商品與現貨商品混用
+    - 停損停利設定僅為觸發送單，不保證必定成交，需視市場狀況調整
+    - 請確認停損停利委託類別設定符合適合之交易規則
+    - 待主單完全成交後，停損停利部分才會啟動
+    - **所有條件必須同時滿足**才會觸發委託單
+
+    Args:
+        account (str): 帳戶號碼
+        start_date (str): 開始日期，格式: YYYYMMDD (例: "20240426")
+        end_date (str): 結束日期，格式: YYYYMMDD (例: "20240430")
+        stop_sign (str): 條件停止條件
+            - Full: 全部成交為止（預設）
+            - Partial: 部分成交為止
+            - UntilEnd: 效期結束為止
+        conditions (list): 多個觸發條件（**所有條件須同時滿足**）
+            每個條件包含：
+            - market_type (str): 市場類型，Reference(參考價) 或 LastPrice(最新價)
+            - symbol (str): 股票代碼
+            - trigger (str): 觸發內容
+                - MatchedPrice: 成交價
+                - BuyPrice: 買價
+                - SellPrice: 賣價
+                - TotalQuantity: 總量
+            - trigger_value (str): 觸發值
+            - comparison (str): 比較運算子
+                - LessThan: <
+                - LessOrEqual: <=
+                - Equal: =
+                - Greater: >
+                - GreaterOrEqual: >=
+        order (dict): 委託單參數
+            - buy_sell (str): Buy 或 Sell
+            - symbol (str): 股票代碼
+            - price (str): 委託價格
+            - quantity (int): 委託數量（股）
+            - market_type (str): Common, Emg, Odd，預設 "Common"
+            - price_type (str): Limit, Market, LimitUp, LimitDown，預設 "Limit"
+            - time_in_force (str): ROD, IOC, FOK，預設 "ROD"
+            - order_type (str): Stock, Margin, Short, DayTrade，預設 "Stock"
+        tpsl (dict, optional): 停損停利參數（選填）
+            - stop_sign (str): Full 或 Flat，預設 "Full"
+            - tp (dict, optional): 停利單參數
+            - sl (dict, optional): 停損單參數
+            - end_date (str, optional): 結束日期 YYYYMMDD
+            - intraday (bool, optional): 是否當日有效
+
+    Returns:
+        dict: 包含狀態和條件單號的字典
+
+    Example (多條件單 - 價格 AND 成交量):
+        {
+            "account": "1234567",
+            "start_date": "20240426",
+            "end_date": "20240430",
+            "stop_sign": "Full",
+            "conditions": [
+                {
+                    "market_type": "Reference",
+                    "symbol": "2881",
+                    "trigger": "MatchedPrice",
+                    "trigger_value": "66",
+                    "comparison": "LessThan"
+                },
+                {
+                    "market_type": "Reference",
+                    "symbol": "2881",
+                    "trigger": "TotalQuantity",
+                    "trigger_value": "8000",
+                    "comparison": "LessThan"
+                }
+            ],
+            "order": {
+                "buy_sell": "Buy",
+                "symbol": "2881",
+                "price": "66",
+                "quantity": 1000
+            }
+        }
+
+    Example (含停損停利):
+        {
+            "account": "1234567",
+            "conditions": [...],
+            "order": {...},
+            "tpsl": {
+                "tp": {"target_price": "85", "price": "85"},
+                "sl": {"target_price": "60", "price": "60"},
+                "end_date": "20240517"
+            }
+        }
+    """
+    try:
+        from fubon_neo.constant import BSAction, TimeInForce
+
+        # 驗證主要參數
+        validated_args = PlaceMultiConditionOrderArgs(**args)
+        account = validated_args.account
+        start_date = validated_args.start_date
+        end_date = validated_args.end_date
+        stop_sign = validated_args.stop_sign
+
+        # 驗證帳戶
+        account_obj, error = validate_and_get_account(account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 建立多個條件對象
+        conditions = []
+        for cond_dict in validated_args.conditions:
+            condition_data = ConditionArgs(**cond_dict)
+            condition = Condition(
+                market_type=getattr(TradingType, condition_data.market_type),
+                symbol=condition_data.symbol,
+                trigger=getattr(TriggerContent, condition_data.trigger),
+                trigger_value=condition_data.trigger_value,
+                comparison=getattr(Operator, condition_data.comparison),
+            )
+            conditions.append(condition)
+
+        # 建立委託單對象
+        order_data = ConditionOrderArgs(**validated_args.order)
+        order = ConditionOrder(
+            buy_sell=getattr(BSAction, order_data.buy_sell),
+            symbol=order_data.symbol,
+            price=order_data.price,
+            quantity=order_data.quantity,
+            market_type=getattr(ConditionMarketType, order_data.market_type),
+            price_type=getattr(ConditionPriceType, order_data.price_type),
+            time_in_force=getattr(TimeInForce, order_data.time_in_force),
+            order_type=getattr(ConditionOrderType, order_data.order_type),
+        )
+
+        # 建立停損停利對象（如果有提供）
+        tpsl = None
+        if validated_args.tpsl:
+            tpsl_data = TPSLWrapperArgs(**validated_args.tpsl)
+
+            # 建立停利單（如果有）
+            tp = None
+            if tpsl_data.tp:
+                tp_data = TPSLOrderArgs(**tpsl_data.tp)
+                tp = TPSLOrder(
+                    time_in_force=getattr(TimeInForce, tp_data.time_in_force),
+                    price_type=getattr(ConditionPriceType, tp_data.price_type),
+                    order_type=getattr(ConditionOrderType, tp_data.order_type),
+                    target_price=tp_data.target_price,
+                    price=tp_data.price,
+                    trigger=getattr(TriggerContent, tp_data.trigger) if tp_data.trigger else TriggerContent.MatchedPrice,
+                )
+
+            # 建立停損單（如果有）
+            sl = None
+            if tpsl_data.sl:
+                sl_data = TPSLOrderArgs(**tpsl_data.sl)
+                sl = TPSLOrder(
+                    time_in_force=getattr(TimeInForce, sl_data.time_in_force),
+                    price_type=getattr(ConditionPriceType, sl_data.price_type),
+                    order_type=getattr(ConditionOrderType, sl_data.order_type),
+                    target_price=sl_data.target_price,
+                    price=sl_data.price,
+                    trigger=getattr(TriggerContent, sl_data.trigger) if sl_data.trigger else TriggerContent.MatchedPrice,
+                )
+
+            # 建立停損停利包裝器
+            tpsl = TPSLWrapper(
+                stop_sign=getattr(StopSign, tpsl_data.stop_sign),
+                tp=tp,
+                sl=sl,
+                end_date=tpsl_data.end_date,
+                intraday=tpsl_data.intraday,
+            )
+
+        # 執行多條件單下單（使用 multi_condition API）
+        result = sdk.stock.multi_condition(
+            account_obj,
+            start_date,
+            end_date,
+            getattr(StopSign, stop_sign),
+            conditions,  # 條件列表
+            order,
+            tpsl,  # 停損停利參數（可為 None）
+        )
+
+        # 檢查結果
+        if result and hasattr(result, "is_success") and result.is_success:
+            guid = getattr(result.data, "guid", None) if hasattr(result, "data") else None
+
+            # 整理條件資訊
+            conditions_info = []
+            for cond_dict in validated_args.conditions:
+                conditions_info.append(
+                    {
+                        "symbol": cond_dict["symbol"],
+                        "trigger": cond_dict["trigger"],
+                        "trigger_value": cond_dict["trigger_value"],
+                        "comparison": cond_dict["comparison"],
+                    }
+                )
+
+            response_data = {
+                "guid": guid,
+                "condition_no": guid,
+                "symbol": order_data.symbol,
+                "buy_sell": order_data.buy_sell,
+                "quantity": order_data.quantity,
+                "conditions_count": len(conditions),
+                "conditions": conditions_info,
+            }
+
+            # 如果有停損停利，加入相關資訊
+            if validated_args.tpsl:
+                tpsl_info = validated_args.tpsl
+                if tpsl_info.get("tp"):
+                    response_data["tp_target"] = tpsl_info["tp"]["target_price"]
+                if tpsl_info.get("sl"):
+                    response_data["sl_target"] = tpsl_info["sl"]["target_price"]
+                response_data["has_tpsl"] = True
+            else:
+                response_data["has_tpsl"] = False
+
+            message = f"多條件單已成功建立 - {order_data.symbol} ({len(conditions)} 個條件)"
+            if response_data.get("has_tpsl"):
+                message += " (含停損停利)"
+
+            return {
+                "status": "success",
+                "data": response_data,
+                "message": message,
+            }
+        else:
+            error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+            return {"status": "error", "message": f"多條件單建立失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"多條件單建立時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def place_daytrade_condition_order(args: Dict) -> dict:
+    """
+    當沖單一條件單（可選停損停利）
+
+    使用富邦官方 single_condition_day_trade API。當觸發條件達成時送出主單，
+    主單成交後會依據當沖設定於指定時間前進行回補；可選擇加入停損停利設定。
+
+    ⚠️ 重要提醒：
+    - 條件單目前不支援期權商品與現貨商品混用
+    - 停損停利設定僅為觸發送單，不保證必定回補成功，需視市場狀況自行調整
+    - 當沖停損停利委託類別需符合當日沖銷交易規則（例如信用交易使用資券互抵）
+    - 主單完全成交後，停損停利部分才會啟動
+
+    Args:
+        account (str): 帳號
+        stop_sign (str): 條件停止條件 Full/Partial/UntilEnd
+        end_time (str): 父單洗價結束時間（例："130000"）
+        condition (dict): 觸發條件（ConditionArgs 結構）
+        order (dict): 主單委託內容（ConditionOrderArgs 結構）
+        daytrade (dict): 當沖回補內容（ConditionDayTradeArgs 結構）
+        tpsl (dict, optional): 停損停利設定（TPSLWrapperArgs 結構）
+        fix_session (bool): 是否執行定盤回補
+
+    Returns:
+        dict: 成功時回傳 guid 與摘要資訊
+
+    Example:
+        {
+            "account": "1234567",
+            "stop_sign": "Full",
+            "end_time": "130000",
+            "condition": {
+                "market_type": "Reference",
+                "symbol": "2881",
+                "trigger": "MatchedPrice",
+                "trigger_value": "66",
+                "comparison": "LessThan"
+            },
+            "order": {
+                "buy_sell": "Buy",
+                "symbol": "2881",
+                "price": "66",
+                "quantity": 1000,
+                "market_type": "Common",
+                "price_type": "Limit",
+                "time_in_force": "ROD",
+                "order_type": "Stock"
+            },
+            "daytrade": {
+                "day_trade_end_time": "131500",
+                "auto_cancel": true,
+                "price": "",
+                "price_type": "Market"
+            },
+            "tpsl": {
+                "stop_sign": "Full",
+                "tp": {"time_in_force": "ROD", "price_type": "Limit", "order_type": "Stock", "target_price": "85", "price": "85"},
+                "sl": {"time_in_force": "ROD", "price_type": "Limit", "order_type": "Stock", "target_price": "60", "price": "60"},
+                "end_date": "20240517",
+                "intraday": true
+            },
+            "fix_session": true
+        }
+    """
+    try:
+        from fubon_neo.constant import BSAction, TimeInForce
+
+        # 驗證參數
+        validated_args = PlaceDayTradeConditionOrderArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated_args.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 建立條件對象
+        cond_args = ConditionArgs(**validated_args.condition)
+        condition = Condition(
+            market_type=getattr(TradingType, cond_args.market_type),
+            symbol=cond_args.symbol,
+            trigger=getattr(TriggerContent, cond_args.trigger),
+            trigger_value=cond_args.trigger_value,
+            comparison=getattr(Operator, cond_args.comparison),
+        )
+
+        # 建立主單委託對象
+        ord_args = ConditionOrderArgs(**validated_args.order)
+        order = ConditionOrder(
+            buy_sell=getattr(BSAction, ord_args.buy_sell),
+            symbol=ord_args.symbol,
+            price=ord_args.price,
+            quantity=ord_args.quantity,
+            market_type=getattr(ConditionMarketType, ord_args.market_type),
+            price_type=getattr(ConditionPriceType, ord_args.price_type),
+            time_in_force=getattr(TimeInForce, ord_args.time_in_force),
+            order_type=getattr(ConditionOrderType, ord_args.order_type),
+        )
+
+        # 建立當沖對象
+        dt_args = ConditionDayTradeArgs(**validated_args.daytrade)
+        daytrade_obj = ConditionDayTrade(
+            day_trade_end_time=dt_args.day_trade_end_time,
+            auto_cancel=dt_args.auto_cancel,
+            price=dt_args.price,
+            price_type=getattr(ConditionPriceType, dt_args.price_type),
+        )
+
+        # 建立停損停利（選填）
+        tpsl = None
+        if validated_args.tpsl:
+            tpsl_args = TPSLWrapperArgs(**validated_args.tpsl)
+
+            tp = None
+            if tpsl_args.tp:
+                tp_args = TPSLOrderArgs(**tpsl_args.tp)
+                tp = TPSLOrder(
+                    time_in_force=getattr(TimeInForce, tp_args.time_in_force),
+                    price_type=getattr(ConditionPriceType, tp_args.price_type),
+                    order_type=getattr(ConditionOrderType, tp_args.order_type),
+                    target_price=tp_args.target_price,
+                    price=tp_args.price,
+                    trigger=getattr(TriggerContent, tp_args.trigger) if tp_args.trigger else TriggerContent.MatchedPrice,
+                )
+
+            sl = None
+            if tpsl_args.sl:
+                sl_args = TPSLOrderArgs(**tpsl_args.sl)
+                sl = TPSLOrder(
+                    time_in_force=getattr(TimeInForce, sl_args.time_in_force),
+                    price_type=getattr(ConditionPriceType, sl_args.price_type),
+                    order_type=getattr(ConditionOrderType, sl_args.order_type),
+                    target_price=sl_args.target_price,
+                    price=sl_args.price,
+                    trigger=getattr(TriggerContent, sl_args.trigger) if sl_args.trigger else TriggerContent.MatchedPrice,
+                )
+
+            tpsl = TPSLWrapper(
+                stop_sign=getattr(StopSign, tpsl_args.stop_sign),
+                tp=tp,
+                sl=sl,
+                end_date=tpsl_args.end_date,
+                intraday=tpsl_args.intraday,
+            )
+
+        # 呼叫 SDK：single_condition_day_trade
+        result = sdk.stock.single_condition_day_trade(
+            account_obj,
+            getattr(StopSign, validated_args.stop_sign),
+            validated_args.end_time,
+            condition,
+            order,
+            daytrade_obj,
+            tpsl,
+            validated_args.fix_session,
+        )
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            guid = getattr(result.data, "guid", None) if hasattr(result, "data") else None
+
+            resp = {
+                "guid": guid,
+                "condition_no": guid,
+                "symbol": ord_args.symbol,
+                "buy_sell": ord_args.buy_sell,
+                "quantity": ord_args.quantity,
+                "end_time": validated_args.end_time,
+                "day_trade_end_time": dt_args.day_trade_end_time,
+                "fix_session": validated_args.fix_session,
+                "has_tpsl": bool(validated_args.tpsl),
+            }
+
+            if validated_args.tpsl:
+                if validated_args.tpsl.get("tp"):
+                    resp["tp_target"] = validated_args.tpsl["tp"]["target_price"]
+                if validated_args.tpsl.get("sl"):
+                    resp["sl_target"] = validated_args.tpsl["sl"]["target_price"]
+
+            msg = f"當沖條件單已成功建立 - {ord_args.symbol}"
+            if resp.get("has_tpsl"):
+                msg += " (含停損停利)"
+
+            return {"status": "success", "data": resp, "message": msg}
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"當沖條件單建立失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"當沖條件單建立時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def get_daytrade_condition_by_id(args: Dict) -> dict:
+    """
+    查詢當沖條件單（依 guid）
+
+    使用富邦官方 `get_condition_daytrade_by_id` API。
+
+    Args:
+        account (str): 帳號
+        guid (str): 條件單號
+
+    Returns:
+        dict: 成功時回傳條件單詳細資料（展開為可序列化的 dict）
+
+    Example:
+        {"account": "1234567", "guid": "8ff3472b-185a-488c-be5a-b478deda080c"}
+    """
+    try:
+        validated = GetDayTradeConditionByIdArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 呼叫 SDK
+        result = sdk.stock.get_condition_daytrade_by_id(account_obj, validated.guid)
+
+        # 序列化工具
+        def to_dict(obj):
+            if obj is None:
+                return None
+            if isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, list):
+                return [to_dict(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: to_dict(v) for k, v in obj.items()}
+            # 嘗試用 __dict__ 轉換
+            try:
+                return {k: to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+            except Exception:
+                return str(obj)
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            data = to_dict(getattr(result, "data", None))
+            # 兼容資料為 None 的情況
+            return {
+                "status": "success",
+                "data": data or {},
+                "message": "查詢成功",
+            }
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"查詢失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"查詢時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def place_daytrade_multi_condition_order(args: Dict) -> dict:
+    """
+    當沖多條件單（可選停損停利）
+
+    使用富邦官方 multi_condition_day_trade API。支援多個條件同時滿足後觸發主單，
+    主單成交後依設定於指定時間前進行回補；可選擇加入停損停利設定。
+
+    ⚠️ 重要提醒：
+    - 條件單不支援期權商品與現貨商品混用
+    - 停損利設定僅為觸發送單，不保證必定回補成功
+    - 當沖停損停利委託類別需符合當日沖銷交易規則（例如資券互抵）
+    - 主單完全成交後，停損停利才會啟動
+
+    Args:
+        account (str), stop_sign (str), end_time (str)
+        conditions (list[ConditionArgs]), order (ConditionOrderArgs)
+        daytrade (ConditionDayTradeArgs), tpsl (TPSLWrapperArgs, optional), fix_session (bool)
+    """
+    try:
+        from fubon_neo.constant import BSAction, TimeInForce
+
+        validated = PlaceDayTradeMultiConditionOrderArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 多個條件
+        conditions = []
+        for cond in validated.conditions:
+            c = ConditionArgs(**cond)
+            conditions.append(
+                Condition(
+                    market_type=getattr(TradingType, c.market_type),
+                    symbol=c.symbol,
+                    trigger=getattr(TriggerContent, c.trigger),
+                    trigger_value=c.trigger_value,
+                    comparison=getattr(Operator, c.comparison),
+                )
+            )
+
+        # 主單
+        ord_args = ConditionOrderArgs(**validated.order)
+        order = ConditionOrder(
+            buy_sell=getattr(BSAction, ord_args.buy_sell),
+            symbol=ord_args.symbol,
+            price=ord_args.price,
+            quantity=ord_args.quantity,
+            market_type=getattr(ConditionMarketType, ord_args.market_type),
+            price_type=getattr(ConditionPriceType, ord_args.price_type),
+            time_in_force=getattr(TimeInForce, ord_args.time_in_force),
+            order_type=getattr(ConditionOrderType, ord_args.order_type),
+        )
+
+        # 當沖設定
+        dt_args = ConditionDayTradeArgs(**validated.daytrade)
+        daytrade_obj = ConditionDayTrade(
+            day_trade_end_time=dt_args.day_trade_end_time,
+            auto_cancel=dt_args.auto_cancel,
+            price=dt_args.price,
+            price_type=getattr(ConditionPriceType, dt_args.price_type),
+        )
+
+        # 停損停利（可選）
+        tpsl = None
+        if validated.tpsl:
+            wrap = TPSLWrapperArgs(**validated.tpsl)
+            tp = None
+            if wrap.tp:
+                tpa = TPSLOrderArgs(**wrap.tp)
+                tp = TPSLOrder(
+                    time_in_force=getattr(TimeInForce, tpa.time_in_force),
+                    price_type=getattr(ConditionPriceType, tpa.price_type),
+                    order_type=getattr(ConditionOrderType, tpa.order_type),
+                    target_price=tpa.target_price,
+                    price=tpa.price,
+                    trigger=getattr(TriggerContent, tpa.trigger) if tpa.trigger else TriggerContent.MatchedPrice,
+                )
+            sl = None
+            if wrap.sl:
+                sla = TPSLOrderArgs(**wrap.sl)
+                sl = TPSLOrder(
+                    time_in_force=getattr(TimeInForce, sla.time_in_force),
+                    price_type=getattr(ConditionPriceType, sla.price_type),
+                    order_type=getattr(ConditionOrderType, sla.order_type),
+                    target_price=sla.target_price,
+                    price=sla.price,
+                    trigger=getattr(TriggerContent, sla.trigger) if sla.trigger else TriggerContent.MatchedPrice,
+                )
+            tpsl = TPSLWrapper(
+                stop_sign=getattr(StopSign, wrap.stop_sign),
+                tp=tp,
+                sl=sl,
+                end_date=wrap.end_date,
+                intraday=wrap.intraday,
+            )
+
+        # 呼叫 SDK：multi_condition_day_trade
+        result = sdk.stock.multi_condition_day_trade(
+            account_obj,
+            getattr(StopSign, validated.stop_sign),
+            validated.end_time,
+            conditions,
+            order,
+            daytrade_obj,
+            tpsl,
+            validated.fix_session,
+        )
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            guid = getattr(result.data, "guid", None) if hasattr(result, "data") else None
+            msg = f"當沖多條件單已成功建立 - {ord_args.symbol} ({len(conditions)} 個條件)"
+            if validated.tpsl:
+                msg += " (含停損停利)"
+
+            return {
+                "status": "success",
+                "data": {
+                    "guid": guid,
+                    "condition_no": guid,
+                    "symbol": ord_args.symbol,
+                    "buy_sell": ord_args.buy_sell,
+                    "quantity": ord_args.quantity,
+                    "end_time": validated.end_time,
+                    "day_trade_end_time": dt_args.day_trade_end_time,
+                    "conditions_count": len(conditions),
+                    "has_tpsl": bool(validated.tpsl),
+                },
+                "message": msg,
+            }
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"當沖多條件單建立失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"當沖多條件單建立時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def place_trail_profit(args: Dict) -> dict:
+    """
+    移動鎖利條件單（trail_profit）
+
+    當前價格相對於基準價達到設定之漲跌百分比（以 percentage 與 direction 計算）時觸發下單。
+
+    ⚠️ 注意：
+    - TrailOrder 基準價 price 只可輸入至多小數點後兩位，否則可能造成洗價失敗（此工具已做基本檢核）
+    - 條件單不支援期權與現貨混用
+
+    Args:
+        account (str): 帳號
+        start_date (str): 監控開始時間（YYYYMMDD）
+        end_date (str): 監控結束時間（YYYYMMDD）
+        stop_sign (str): Full/Partial/UntilEnd
+        trail (dict): TrailOrder 參數（TrailOrderArgs 結構）
+
+    Returns:
+        dict: 成功時回傳 guid 與摘要
+
+    Example:
+        {
+            "account": "1234567",
+            "start_date": "20240427",
+            "end_date": "20240516",
+            "stop_sign": "Full",
+            "trail": {
+                "symbol": "2330",
+                "price": "860",
+                "direction": "Up",
+                "percentage": 5,
+                "buy_sell": "Buy",
+                "quantity": 2000,
+                "price_type": "MatchedPrice",
+                "diff": 5,
+                "time_in_force": "ROD",
+                "order_type": "Stock"
+            }
+        }
+    """
+    try:
+        from fubon_neo.constant import BSAction, TimeInForce
+
+        # 驗證輸入
+        account = args.get("account")
+        start_date = args.get("start_date")
+        end_date = args.get("end_date")
+        stop_sign = args.get("stop_sign", "Full")
+        trail_dict = args.get("trail") or {}
+
+        # 檢核 trail 參數
+        trail_args = TrailOrderArgs(**trail_dict)
+
+        # 帳戶
+        account_obj, error = validate_and_get_account(account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 組 TrailOrder 物件
+        trail = TrailOrder(
+            symbol=trail_args.symbol,
+            price=trail_args.price,
+            direction=getattr(Direction, trail_args.direction),
+            percentage=trail_args.percentage,
+            buy_sell=getattr(BSAction, trail_args.buy_sell),
+            quantity=trail_args.quantity,
+            price_type=getattr(ConditionPriceType, trail_args.price_type),
+            diff=trail_args.diff,
+            time_in_force=getattr(TimeInForce, trail_args.time_in_force),
+            order_type=getattr(ConditionOrderType, trail_args.order_type),
+        )
+
+        # 呼叫 SDK
+        result = sdk.stock.trail_profit(
+            account_obj,
+            start_date,
+            end_date,
+            getattr(StopSign, stop_sign),
+            trail,
+        )
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            guid = getattr(result.data, "guid", None) if hasattr(result, "data") else None
+            return {
+                "status": "success",
+                "data": {
+                    "guid": guid,
+                    "condition_no": guid,
+                    "symbol": trail_args.symbol,
+                    "buy_sell": trail_args.buy_sell,
+                    "quantity": trail_args.quantity,
+                    "direction": trail_args.direction,
+                    "percentage": trail_args.percentage,
+                },
+                "message": f"移動鎖利條件單已建立 - {trail_args.symbol}",
+            }
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"移動鎖利條件單建立失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"移動鎖利條件單建立時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def get_trail_order(args: Dict) -> dict:
+    """
+    有效移動鎖利查詢（get_trail_order）
+
+    查詢目前有效的移動鎖利條件單清單，對應官方 SDK `get_trail_order`。
+
+    Args:
+        account (str): 帳號
+
+    Returns:
+        dict: 成功時回傳展開的清單資料（可序列化 dict 陣列）
+    """
+    try:
+        validated = GetTrailOrderArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 呼叫 SDK
+        result = sdk.stock.get_trail_order(account_obj)
+
+        # 序列化
+        def to_dict(obj):
+            if obj is None:
+                return None
+            if isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, list):
+                return [to_dict(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: to_dict(v) for k, v in obj.items()}
+            try:
+                return {k: to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+            except Exception:
+                return str(obj)
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            data = getattr(result, "data", [])
+            data_list = to_dict(data) or []
+            return {"status": "success", "data": data_list, "message": "查詢成功"}
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"查詢失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"查詢時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def get_trail_history(args: Dict) -> dict:
+    """
+    歷史移動鎖利查詢（get_trail_history）
+
+    查詢指定期間內的歷史移動鎖利條件單紀錄，對應官方 SDK `get_trail_history(account, start_date, end_date)`。
+
+    Args:
+        account (str): 帳號
+        start_date (str): 查詢開始日，格式 YYYYMMDD
+        end_date (str): 查詢截止日，格式 YYYYMMDD
+
+    Returns:
+        dict: 成功時回傳可序列化的歷史條件單清單資料（ConditionDetail 陣列）
+    """
+    try:
+        validated = GetTrailHistoryArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 呼叫 SDK
+        result = sdk.stock.get_trail_history(account_obj, validated.start_date, validated.end_date)
+
+        # 序列化工具
+        def to_dict(obj):
+            if obj is None:
+                return None
+            if isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, list):
+                return [to_dict(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: to_dict(v) for k, v in obj.items()}
+            try:
+                return {k: to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+            except Exception:
+                return str(obj)
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            data = getattr(result, "data", []) or []
+            data_list = to_dict(data) or []
+            count = len(data_list) if isinstance(data_list, list) else 0
+            return {
+                "status": "success",
+                "data": data_list,
+                "message": f"查詢成功，共 {count} 筆（{validated.start_date}~{validated.end_date}）",
+            }
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"查詢失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"查詢時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def place_time_slice_order(args: Dict) -> dict:
+    """
+    分時分量條件單（time_slice_order）
+
+    依據 `SplitDescription` 拆單策略與 `ConditionOrder` 委託內容，於指定期間內按時間分批送單。
+
+    Args:
+        account (str): 帳號
+        start_date (str): 監控開始日 YYYYMMDD
+        end_date (str): 監控結束日 YYYYMMDD
+        stop_sign (str): Full / Partial / UntilEnd
+        split (dict): 分時分量設定（TimeSliceSplitArgs）
+        order (dict): 委託內容（ConditionOrderArgs）
+
+    Returns:
+        dict: 成功時回傳 guid 與摘要資訊
+    """
+    try:
+        from fubon_neo.constant import BSAction, TimeInForce
+
+        validated = PlaceTimeSliceOrderArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 建立 SplitDescription
+        split_args = TimeSliceSplitArgs(**validated.split)
+        split_kwargs = {
+            "method": getattr(TimeSliceOrderType, split_args.method),
+            "interval": split_args.interval,
+            "single_quantity": split_args.single_quantity,
+            "start_time": split_args.start_time,
+        }
+        if split_args.total_quantity is not None:
+            split_kwargs["total_quantity"] = split_args.total_quantity
+        if getattr(split_args, "end_time", None):
+            split_kwargs["end_time"] = split_args.end_time
+        split = SplitDescription(**split_kwargs)
+
+        # 建立 ConditionOrder
+        ord_args = ConditionOrderArgs(**validated.order)
+        order = ConditionOrder(
+            buy_sell=getattr(BSAction, ord_args.buy_sell),
+            symbol=ord_args.symbol,
+            price=ord_args.price,
+            quantity=ord_args.quantity,
+            market_type=getattr(ConditionMarketType, ord_args.market_type),
+            price_type=getattr(ConditionPriceType, ord_args.price_type),
+            time_in_force=getattr(TimeInForce, ord_args.time_in_force),
+            order_type=getattr(ConditionOrderType, ord_args.order_type),
+        )
+
+        # 呼叫 SDK：time_slice_order
+        result = sdk.stock.time_slice_order(
+            account_obj,
+            validated.start_date,
+            validated.end_date,
+            getattr(StopSign, validated.stop_sign),
+            split,
+            order,
+        )
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            guid = getattr(result.data, "guid", None) if hasattr(result, "data") else None
+            resp = {
+                "guid": guid,
+                "condition_no": guid,
+                "symbol": ord_args.symbol,
+                "buy_sell": ord_args.buy_sell,
+                "quantity": ord_args.quantity,
+                "method": split_args.method,
+                "interval": split_args.interval,
+                "single_quantity": split_args.single_quantity,
+                "total_quantity": split_args.total_quantity,
+                "start_time": split_args.start_time,
+                "end_time": getattr(split_args, "end_time", None),
+            }
+            return {
+                "status": "success",
+                "data": resp,
+                "message": f"分時分量條件單已成功建立 - {ord_args.symbol}",
+            }
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"分時分量條件單建立失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"建立時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def get_time_slice_order(args: Dict) -> dict:
+    """
+    分時分量查詢（get_time_slice_order）
+
+    查詢指定分時分量條件單號的明細列表，對應官方 SDK
+    `get_time_slice_order(account, batch_no)`。
+
+    Args:
+        account (str): 帳號
+        batch_no (str): 分時分量條件單號
+
+    Returns:
+        dict: 成功時回傳展開的明細陣列（ConditionDetail list）
+    """
+    try:
+        validated = GetTimeSliceOrderArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 呼叫 SDK
+        result = sdk.stock.get_time_slice_order(account_obj, validated.batch_no)
+
+        # 序列化
+        def to_dict(obj):
+            if obj is None:
+                return None
+            if isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, list):
+                return [to_dict(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: to_dict(v) for k, v in obj.items()}
+            try:
+                return {k: to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+            except Exception:
+                return str(obj)
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            data = getattr(result, "data", []) or []
+            data_list = to_dict(data) or []
+            count = len(data_list) if isinstance(data_list, list) else 0
+            return {
+                "status": "success",
+                "data": data_list,
+                "message": f"查詢成功，共 {count} 筆（batch_no={validated.batch_no}）",
+            }
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"查詢失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"查詢時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def cancel_condition_order(args: Dict) -> dict:
+    """
+    取消條件單（cancel_condition_order）
+
+    對應官方 SDK `cancel_condition_orders(account, guid)`，用於取消指定條件單號。
+
+    Args:
+        account (str): 帳號
+        guid (str): 條件單號
+
+    Returns:
+        dict: 成功時回傳 `advisory` 等資訊
+    """
+    try:
+        validated = CancelConditionOrderArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 呼叫 SDK
+        result = sdk.stock.cancel_condition_orders(account_obj, validated.guid)
+
+        # 序列化
+        def to_dict(obj):
+            if obj is None:
+                return None
+            if isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, list):
+                return [to_dict(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: to_dict(v) for k, v in obj.items()}
+            try:
+                return {k: to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+            except Exception:
+                return str(obj)
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            data_dict = to_dict(getattr(result, "data", None)) or {}
+            advisory_text = data_dict.get("advisory") if isinstance(data_dict, dict) else None
+            msg = advisory_text or f"取消成功（guid={validated.guid}）"
+            return {"status": "success", "data": data_dict, "message": msg}
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"取消失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"取消時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def get_condition_order(args: Dict) -> dict:
+    """
+    條件單查詢（get_condition_order）
+
+    查詢帳號下的條件單清單，可選擇性依 ConditionStatus 過濾。
+
+    Args:
+        account (str): 帳號
+        condition_status (str, optional): 對應 `ConditionStatus` 成員名稱
+
+    Returns:
+        dict: 成功時回傳展開的清單資料（ConditionDetail list）
+    """
+    try:
+        validated = GetConditionOrderArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 呼叫 SDK（依是否提供條件狀態決定簽名）
+        if validated.condition_status:
+            try:
+                status_enum = getattr(ConditionStatus, validated.condition_status)
+            except AttributeError:
+                return {"status": "error", "message": f"不支援的條件單狀態: {validated.condition_status}"}
+            result = sdk.stock.get_condition_order(account_obj, status_enum)
+        else:
+            result = sdk.stock.get_condition_order(account_obj)
+
+        # 序列化
+        def to_dict(obj):
+            if obj is None:
+                return None
+            if isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, list):
+                return [to_dict(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: to_dict(v) for k, v in obj.items()}
+            try:
+                return {k: to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+            except Exception:
+                return str(obj)
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            data = getattr(result, "data", []) or []
+            data_list = to_dict(data) or []
+            count = len(data_list) if isinstance(data_list, list) else 0
+            suffix = f", 狀態={validated.condition_status}" if validated.condition_status else ""
+            return {
+                "status": "success",
+                "data": data_list,
+                "message": f"查詢成功，共 {count} 筆{suffix}",
+            }
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"查詢失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"查詢時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def get_condition_order_by_id(args: Dict) -> dict:
+    """
+    條件單查詢（By Guid） get_condition_order_by_id
+
+    Args:
+        account (str): 帳號
+        guid (str): 條件單號
+
+    Returns:
+        dict: 成功時回傳單一 `ConditionDetail`（展開為可序列化 dict）
+    """
+    try:
+        validated = GetConditionOrderByIdArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 呼叫 SDK
+        result = sdk.stock.get_condition_order_by_id(account_obj, validated.guid)
+
+        # 序列化
+        def to_dict(obj):
+            if obj is None:
+                return None
+            if isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, list):
+                return [to_dict(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: to_dict(v) for k, v in obj.items()}
+            try:
+                return {k: to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+            except Exception:
+                return str(obj)
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            data = getattr(result, "data", None)
+            data_dict = to_dict(data) or {}
+            return {"status": "success", "data": data_dict, "message": "查詢成功"}
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"查詢失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"查詢時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def get_condition_history(args: Dict) -> dict:
+    """
+    歷史條件單查詢（get_condition_history）
+
+    依建立日期區間查詢歷史條件單，支援可選的歷史狀態過濾。
+
+    Args:
+        account (str): 帳號
+        start_date (str): 查詢開始日 YYYYMMDD
+        end_date (str): 查詢截止日 YYYYMMDD
+        condition_history_status (str, optional): 對應 `HistoryStatus` 成員名稱
+
+    Returns:
+        dict: 成功時回傳展開的清單資料（ConditionDetail list）
+    """
+    try:
+        validated = GetConditionHistoryArgs(**args)
+
+        # 帳戶驗證
+        account_obj, error = validate_and_get_account(validated.account)
+        if error:
+            return {"status": "error", "message": error}
+
+        # 呼叫 SDK（依是否提供歷史狀態決定簽名）
+        if validated.condition_history_status:
+            try:
+                hist_enum = getattr(HistoryStatus, validated.condition_history_status)
+            except AttributeError:
+                return {"status": "error", "message": f"不支援的歷史條件單狀態: {validated.condition_history_status}"}
+            result = sdk.stock.get_condition_history(account_obj, validated.start_date, validated.end_date, hist_enum)
+        else:
+            result = sdk.stock.get_condition_history(account_obj, validated.start_date, validated.end_date)
+
+        # 序列化
+        def to_dict(obj):
+            if obj is None:
+                return None
+            if isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, list):
+                return [to_dict(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: to_dict(v) for k, v in obj.items()}
+            try:
+                return {k: to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+            except Exception:
+                return str(obj)
+
+        if result and hasattr(result, "is_success") and result.is_success:
+            data = getattr(result, "data", []) or []
+            data_list = to_dict(data) or []
+            count = len(data_list) if isinstance(data_list, list) else 0
+            suffix = f", 狀態={validated.condition_history_status}" if validated.condition_history_status else ""
+            return {
+                "status": "success",
+                "data": data_list,
+                "message": f"查詢成功，共 {count} 筆（{validated.start_date}~{validated.end_date}{suffix}）",
+            }
+
+        error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+        return {"status": "error", "message": f"查詢失敗: {error_msg}"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"查詢時發生錯誤: {str(e)}"}
 
 
 def main():

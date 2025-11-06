@@ -17,7 +17,12 @@ from fubon_api_mcp_server.server import (
     save_to_local_csv,
     validate_and_get_account,
 )
-from fubon_api_mcp_server.utils import handle_exceptions, validate_and_get_account as utils_validate_and_get_account, get_order_by_no as utils_get_order_by_no, _safe_api_call as utils_safe_api_call
+from fubon_api_mcp_server.utils import _safe_api_call as utils_safe_api_call
+from fubon_api_mcp_server.utils import get_order_by_no as utils_get_order_by_no
+from fubon_api_mcp_server.utils import (
+    handle_exceptions,
+)
+from fubon_api_mcp_server.utils import validate_and_get_account as utils_validate_and_get_account
 
 
 class TestValidateAndGetAccount:
@@ -225,6 +230,7 @@ class TestHandleExceptions:
 
     def test_handle_exceptions_success(self):
         """Test decorator with successful function."""
+
         @handle_exceptions
         def test_func():
             return "success"
@@ -234,6 +240,7 @@ class TestHandleExceptions:
 
     def test_handle_exceptions_failure(self, capsys):
         """Test decorator with exception."""
+
         @handle_exceptions
         def test_func():
             raise ValueError("test error")
@@ -251,12 +258,15 @@ class TestUtilsValidateAndGetAccount:
 
     @patch("dotenv.load_dotenv")
     @patch("fubon_neo.sdk.FubonSDK")
-    @patch.dict("os.environ", {
-        "FUBON_USERNAME": "test_user",
-        "FUBON_PASSWORD": "test_pass",
-        "FUBON_PFX_PATH": "test.pfx",
-        "FUBON_PFX_PASSWORD": "test_pfx_pass"
-    })
+    @patch.dict(
+        "os.environ",
+        {
+            "FUBON_USERNAME": "test_user",
+            "FUBON_PASSWORD": "test_pass",
+            "FUBON_PFX_PATH": "test.pfx",
+            "FUBON_PFX_PASSWORD": "test_pfx_pass",
+        },
+    )
     def test_utils_validate_and_get_account_success(self, mock_sdk_class, mock_load_dotenv):
         """Test successful account validation in utils."""
         mock_sdk = Mock()
@@ -330,6 +340,7 @@ class TestUtilsSafeApiCall:
 
     def test_utils_safe_api_call_failure(self):
         """Test failed API call in utils."""
+
         def mock_api_func():
             raise Exception("API error")
 

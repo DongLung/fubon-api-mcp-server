@@ -70,6 +70,8 @@ class TestGetIntradayTickers:
 
 
 class TestGetIntradayTicker:
+    """Test get_intraday_ticker function."""
+
     def test_get_intraday_ticker_success(self, mock_server_globals, mock_sdk):
         """Test get_intraday_ticker success."""
         mock_response = Mock()
@@ -156,7 +158,14 @@ class TestGetSnapshotMovers:
 
     def test_get_snapshot_movers_success(self, mock_server_globals, mock_sdk):
         """Test get_snapshot_movers success."""
-        mock_response = {"data": [{"symbol": "2330", "change": 5.0}], "market": "TSE", "direction": "up", "change": "percent", "date": "2023-01-01", "time": "09:00"}
+        mock_response = {
+            "data": [{"symbol": "2330", "change": 5.0}],
+            "market": "TSE",
+            "direction": "up",
+            "change": "percent",
+            "date": "2023-01-01",
+            "time": "09:00",
+        }
         mock_sdk.marketdata.rest_client.stock.snapshot.movers.return_value = mock_response
 
         result = get_snapshot_movers({"market": "TSE"})
@@ -195,13 +204,31 @@ class TestGetSnapshotActives:
 
     def test_get_historical_stats_success(self, mock_server_globals, mock_sdk):
         """Test get_historical_stats success."""
-        mock_response = {"week52High": 600.0, "week52Low": 400.0, "symbol": "2330", "name": "台積電", "closePrice": 500.0, "change": 5.0, "changePercent": 1.0, "date": "2023-01-01"}
+        mock_response = {
+            "week52High": 600.0,
+            "week52Low": 400.0,
+            "symbol": "2330",
+            "name": "台積電",
+            "closePrice": 500.0,
+            "change": 5.0,
+            "changePercent": 1.0,
+            "date": "2023-01-01",
+        }
         mock_sdk.marketdata.rest_client.stock.historical.stats.return_value = mock_response
 
         result = get_historical_stats({"symbol": "2330"})
 
         assert result["status"] == "success"
-        assert result["data"] == {"symbol": "2330", "name": "台積電", "52_week_high": 600.0, "52_week_low": 400.0, "current_price": 500.0, "change": 5.0, "change_percent": 1.0, "date": "2023-01-01"}
+        assert result["data"] == {
+            "symbol": "2330",
+            "name": "台積電",
+            "52_week_high": 600.0,
+            "52_week_low": 400.0,
+            "current_price": 500.0,
+            "change": 5.0,
+            "change_percent": 1.0,
+            "date": "2023-01-01",
+        }
         assert "成功獲取 2330 近 52 週統計" in result["message"]
 
     def test_get_historical_stats_exception(self, mock_server_globals, mock_sdk):
