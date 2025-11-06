@@ -11,7 +11,6 @@ from fubon_api_mcp_server.server import (
     get_intraday_candles,
     get_intraday_quote,
     get_intraday_ticker,
-    get_intraday_tickers,
     get_intraday_trades,
     get_intraday_volumes,
     get_realtime_quotes,
@@ -44,29 +43,6 @@ class TestGetRealtimeQuotes:
 
         assert result["status"] == "error"
         assert "獲取即時行情失敗" in result["message"]
-
-
-class TestGetIntradayTickers:
-    """Test get_intraday_tickers function."""
-
-    def test_get_intraday_tickers_success(self, mock_server_globals, mock_sdk):
-        """Test get_intraday_tickers success."""
-        mock_sdk.marketdata.rest_client.stock.intraday.tickers.return_value = [{"symbol": "2330", "name": "台積電"}]
-
-        result = get_intraday_tickers({"market": "TSE"})
-
-        assert result["status"] == "success"
-        assert result["data"] == [{"symbol": "2330", "name": "台積電"}]
-        assert "成功獲取 TSE 市場股票列表" in result["message"]
-
-    def test_get_intraday_tickers_exception(self, mock_server_globals, mock_sdk):
-        """Test get_intraday_tickers with exception."""
-        mock_sdk.marketdata.rest_client.stock.intraday.tickers.side_effect = Exception("API error")
-
-        result = get_intraday_tickers({"market": "TSE"})
-
-        assert result["status"] == "error"
-        assert "獲取股票列表失敗" in result["message"]
 
 
 class TestGetIntradayTicker:

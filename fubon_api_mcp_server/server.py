@@ -521,7 +521,11 @@ class GetUnrealizedPnLArgs(BaseModel):
 
 class GetSettlementArgs(BaseModel):
     account: str
-    days: str = "0d"  # 0d, 1d, 2d, 3d
+    range: str = Field("0d", pattern="^(0d|3d)$")  # 0d: 當日, 3d: 3日
+
+
+class GetMaintenanceArgs(BaseModel):
+    account: str
 
 
 class GetBankBalanceArgs(BaseModel):
@@ -551,7 +555,14 @@ class QuerySymbolSnapshotArgs(BaseModel):
 
 
 class GetIntradayTickersArgs(BaseModel):
-    market: str  # e.g., TSE, OTC
+    market: str  # 市場別，可選 TSE 上市；OTC 上櫃；ESB 興櫃一般板；TIB 臺灣創新板；PSB 興櫃戰略新板
+    type: Optional[str] = None  # 類型，可選 ALLBUT099 包含一般股票、特別股及ETF ； COMMONSTOCK 為一般股票
+    exchange: Optional[str] = None  # 交易所，可選 TSE 或 OTC
+    industry: Optional[str] = None  # 行業別
+    isNormal: Optional[bool] = None  # 是否為普通股
+    isAttention: Optional[bool] = None  # 是否為注意股
+    isDisposition: Optional[bool] = None  # 是否為處置股
+    isHalted: Optional[bool] = None  # 是否為停止交易股
 
 
 class GetIntradayTickerArgs(BaseModel):
@@ -927,6 +938,100 @@ class PlaceDayTradeMultiConditionOrderArgs(BaseModel):
     daytrade: Dict  # 當沖回補內容（ConditionDayTradeArgs）
     tpsl: Optional[Dict] = None  # 停損停利（TPSLWrapperArgs，選填）
     fix_session: bool = False  # 是否執行定盤回補
+
+
+class Realized(BaseModel):
+    """已實現損益數據模型"""
+
+    date: str
+    branch_no: str
+    account: str
+    stock_no: str
+    buy_sell: str
+    filled_qty: int
+    filled_price: float
+    order_type: str
+    realized_profit: int
+    realized_loss: int
+
+
+class GetRealizedPnLArgs(BaseModel):
+    """已實現損益查詢參數"""
+
+    account: str = Field(..., description="帳戶號碼")
+
+
+class RealizedSummary(BaseModel):
+    """已實現損益彙總數據模型"""
+
+    start_date: str
+    end_date: str
+    branch_no: str
+    account: str
+    stock_no: str
+    buy_sell: str
+    order_type: str
+    filled_qty: int
+    filled_avg_price: float
+    realized_profit_and_loss: int
+
+
+class GetRealizedPnLSummaryArgs(BaseModel):
+    """已實現損益彙總查詢參數"""
+
+    account: str = Field(..., description="帳戶號碼")
+
+
+class UnrealizedData(BaseModel):
+    """未實現損益數據模型"""
+
+    date: str
+    branch_no: str
+    stock_no: str
+    buy_sell: str
+    order_type: str
+    cost_price: float
+    tradable_qty: int
+    today_qty: int
+    unrealized_profit: int
+    unrealized_loss: int
+
+
+class GetUnrealizedPnLArgs(BaseModel):
+    """未實現損益查詢參數"""
+
+    account: str = Field(..., description="帳戶號碼")
+
+
+class MaintenanceSummary(BaseModel):
+    """維護保證金總計資訊"""
+
+    total_market_value: float
+    total_maintenance_margin: float
+    total_equity: float
+    total_margin_balance: float
+    total_short_balance: float
+
+
+class MaintenanceDetail(BaseModel):
+    """維護保證金明細資訊"""
+
+    stock_no: str
+    quantity: int
+    market_price: float
+    market_value: float
+    maintenance_margin: float
+    equity: float
+    margin_balance: float
+    short_balance: float
+
+
+class MaintenanceData(BaseModel):
+    """維護保證金數據"""
+
+    maintenance_ratio: float
+    summary: MaintenanceSummary
+    details: List[MaintenanceDetail]
 
 
 @mcp.tool()
@@ -1419,12 +1524,12 @@ def get_settlement_info(args: Dict) -> dict:
 
     Args:
         account (str): 帳戶號碼
-        days (str): 查詢天數，預設 "0d" (今天)，可選 "1d", "2d", "3d"
+        range (str): 查詢範圍，預設 "0d" (當日)，可選 "3d" (3日)
     """
     try:
         validated_args = GetSettlementArgs(**args)
         account = validated_args.account
-        days = validated_args.days
+        range_param = validated_args.range
 
         # 驗證並獲取帳戶對象
         account_obj, error = validate_and_get_account(account)
@@ -1432,12 +1537,12 @@ def get_settlement_info(args: Dict) -> dict:
             return {"status": "error", "data": None, "message": error}
 
         # 獲取交割資訊
-        settlement = sdk.accounting.query_settlement(account_obj, days)
+        settlement = sdk.accounting.query_settlement(account_obj, range_param)
         if settlement and hasattr(settlement, "is_success") and settlement.is_success:
             return {
                 "status": "success",
                 "data": settlement.data if hasattr(settlement, "data") else settlement,
-                "message": f"成功獲取帳戶 {account} {days} 交割資訊",
+                "message": f"成功獲取帳戶 {account} {range_param} 交割資訊",
             }
         else:
             return {"status": "error", "data": None, "message": f"無法獲取帳戶 {account} 交割資訊"}
@@ -2048,17 +2153,84 @@ def query_symbol_snapshot(args: Dict) -> dict:
 
     except Exception as e:
         return {"status": "error", "data": None, "message": f"批量獲取商品報價失敗: {str(e)}"}
+@mcp.tool()
+def get_intraday_tickers(args: Dict) -> dict:
     """
     獲取股票或指數列表（依條件查詢）
 
+    對應富邦官方 API: intraday/tickers/{market}
+
     Args:
-        market (str): 市場別，如 TSE, OTC
+        market (str): 市場別，可選 TSE 上市；OTC 上櫃；ESB 興櫃一般板；TIB 臺灣創新板；PSB 興櫃戰略新板
+        type (str, optional): 類型，可選 ALLBUT099 包含一般股票、特別股及ETF；COMMONSTOCK 為一般股票
+        exchange (str, optional): 交易所，可選 TSE 或 OTC
+        industry (str, optional): 行業別
+        isNormal (bool, optional): 是否為普通股
+        isAttention (bool, optional): 是否為注意股
+        isDisposition (bool, optional): 是否為處置股
+        isHalted (bool, optional): 是否為停止交易股
+
+    Returns:
+        dict: 成功時返回包含以下字段的字典：
+            - status: "success"
+            - data: 股票列表
+            - market: 市場別
+            - type: 類型
+            - exchange: 交易所
+            - industry: 行業別
+            - isNormal: 是否普通股
+            - isAttention: 是否注意股
+            - isDisposition: 是否處置股
+            - isHalted: 是否停止交易
+            - message: 成功訊息
+
+        每筆股票數據包含：
+            - symbol: 股票代碼
+            - name: 股票名稱
+            - exchange: 交易所
+            - market: 市場別
+            - industry: 行業別
+            - isNormal: 是否普通股
+            - isAttention: 是否注意股
+            - isDisposition: 是否處置股
+            - isHalted: 是否停止交易
+
+    Example:
+        {
+            "market": "TSE",
+            "type": "COMMONSTOCK",
+            "isNormal": true
+        }
     """
     try:
         validated_args = GetIntradayTickersArgs(**args)
         market = validated_args.market
+        type_param = validated_args.type
+        exchange = validated_args.exchange
+        industry = validated_args.industry
+        isNormal = validated_args.isNormal
+        isAttention = validated_args.isAttention
+        isDisposition = validated_args.isDisposition
+        isHalted = validated_args.isHalted
 
-        result = reststock.intraday.tickers(market=market)
+        # 構建API調用參數
+        api_params = {"market": market}
+        if type_param:
+            api_params["type"] = type_param
+        if exchange:
+            api_params["exchange"] = exchange
+        if industry:
+            api_params["industry"] = industry
+        if isNormal is not None:
+            api_params["isNormal"] = isNormal
+        if isAttention is not None:
+            api_params["isAttention"] = isAttention
+        if isDisposition is not None:
+            api_params["isDisposition"] = isDisposition
+        if isHalted is not None:
+            api_params["isHalted"] = isHalted
+
+        result = reststock.intraday.tickers(**api_params)
         return {"status": "success", "data": result, "message": f"成功獲取 {market} 市場股票列表"}
     except Exception as e:
         return {"status": "error", "data": None, "message": f"獲取股票列表失敗: {str(e)}"}
@@ -4468,6 +4640,375 @@ def get_condition_history(args: Dict) -> dict:
 
     except Exception as e:
         return {"status": "error", "message": f"查詢時發生錯誤: {str(e)}"}
+
+
+@mcp.tool()
+def get_realized_pnl(args: Dict) -> dict:
+    """
+    獲取已實現損益資訊
+
+    查詢帳戶的已實現損益記錄，對應官方 SDK `accounting.realized_gains_and_loses(account)`。
+
+    ⚠️ 重要用途：
+    - 查詢已實現的損益記錄
+    - 分析交易績效和損益統計
+    - 追蹤已平倉部位的損益情況
+
+    Args:
+        account (str): 帳戶號碼
+
+    Returns:
+        dict: 成功時返回已實現損益記錄列表，每筆記錄包含以下關鍵字段：
+            - date (str): 資料日期
+            - branch_no (str): 分公司代號
+            - account (str): 帳戶號碼
+            - stock_no (str): 股票代碼
+            - buy_sell (str): 買賣別，"Buy" 或 "Sell"
+            - filled_qty (int): 成交股數
+            - filled_price (float): 成交價
+            - order_type (str): 委託類型，"Stock"、"Margin"、"Short" 或 "DayTrade"
+            - realized_profit (int): 已實現獲利金額
+            - realized_loss (int): 已實現損失金額
+
+    Note:
+        **損益計算說明**:
+        - realized_profit: 已實現的獲利金額（正數表示獲利）
+        - realized_loss: 已實現的損失金額（正數表示損失）
+        - 單筆交易的淨損益 = realized_profit - realized_loss
+
+        **委託類型說明**:
+        - Stock: 現股交易
+        - Margin: 融資交易
+        - Short: 融券交易
+        - DayTrade: 當沖交易
+    """
+    try:
+        validated_args = GetRealizedPnLArgs(**args)
+        account = validated_args.account
+
+        # 驗證並獲取帳戶對象
+        account_obj, error = validate_and_get_account(account)
+        if error:
+            return {"status": "error", "data": None, "message": error}
+
+        # 獲取已實現損益
+        realized_pnl = sdk.accounting.realized_gains_and_loses(account_obj)
+        if realized_pnl and hasattr(realized_pnl, "is_success") and realized_pnl.is_success:
+            # 處理數據，將枚舉轉為字串
+            processed_data = []
+            if hasattr(realized_pnl, "data") and realized_pnl.data:
+                for item in realized_pnl.data:
+                    processed_item = {
+                        "date": getattr(item, "date", ""),
+                        "branch_no": getattr(item, "branch_no", ""),
+                        "account": getattr(item, "account", ""),
+                        "stock_no": getattr(item, "stock_no", ""),
+                        "buy_sell": str(getattr(item, "buy_sell", "")).split(".")[-1],  # 轉為字串
+                        "filled_qty": getattr(item, "filled_qty", 0),
+                        "filled_price": getattr(item, "filled_price", 0.0),
+                        "order_type": str(getattr(item, "order_type", "")).split(".")[-1],  # 轉為字串
+                        "realized_profit": getattr(item, "realized_profit", 0),
+                        "realized_loss": getattr(item, "realized_loss", 0),
+                    }
+                    processed_data.append(processed_item)
+
+            return {
+                "status": "success",
+                "data": processed_data,
+                "message": f"成功獲取帳戶 {account} 已實現損益，共 {len(processed_data)} 筆記錄",
+            }
+        else:
+            return {"status": "error", "data": None, "message": f"無法獲取帳戶 {account} 已實現損益"}
+
+    except Exception as e:
+        return {"status": "error", "data": None, "message": f"獲取已實現損益失敗: {str(e)}"}
+
+
+@mcp.tool()
+def get_realized_pnl_summary(args: Dict) -> dict:
+    """
+    獲取已實現損益彙總資訊
+
+    查詢帳戶的已實現損益彙總記錄，對應官方 SDK `accounting.realized_gains_and_loses_summary(account)`。
+
+    ⚠️ 重要用途：
+    - 查詢已實現損益的彙總統計
+    - 分析交易績效總覽
+    - 追蹤帳戶整體損益狀況
+
+    Args:
+        account (str): 帳戶號碼
+
+    Returns:
+        dict: 成功時返回已實現損益彙總記錄列表，每筆記錄包含以下關鍵字段：
+            - start_date (str): 彙總起始日
+            - end_date (str): 彙總截止日
+            - branch_no (str): 分公司代號
+            - account (str): 帳戶號碼
+            - stock_no (str): 股票代碼
+            - buy_sell (str): 買賣別，"Buy" 或 "Sell"
+            - order_type (str): 委託類型，"Stock"、"Margin"、"Short"、"DayTrade" 或 "SBL"
+            - filled_qty (int): 成交股數
+            - filled_avg_price (float): 成交均價
+            - realized_profit_and_loss (int): 已實現損益金額
+
+    Note:
+        **損益計算說明**:
+        - realized_profit_and_loss: 已實現的損益金額（正數表示獲利，負數表示損失）
+
+        **委託類型說明**:
+        - Stock: 現股交易
+        - Margin: 融資交易
+        - Short: 融券交易
+        - DayTrade: 當沖先賣交易
+        - SBL: 借券賣出交易
+    """
+    try:
+        validated_args = GetRealizedPnLSummaryArgs(**args)
+        account = validated_args.account
+
+        # 驗證並獲取帳戶對象
+        account_obj, error = validate_and_get_account(account)
+        if error:
+            return {"status": "error", "data": None, "message": error}
+
+        # 獲取已實現損益彙總
+        realized_pnl_summary = sdk.accounting.realized_gains_and_loses_summary(account_obj)
+        if realized_pnl_summary and hasattr(realized_pnl_summary, "is_success") and realized_pnl_summary.is_success:
+            # 處理數據，將枚舉轉為字串
+            processed_data = []
+            if hasattr(realized_pnl_summary, "data") and realized_pnl_summary.data:
+                for item in realized_pnl_summary.data:
+                    processed_item = {
+                        "start_date": getattr(item, "start_date", ""),
+                        "end_date": getattr(item, "end_date", ""),
+                        "branch_no": getattr(item, "branch_no", ""),
+                        "account": getattr(item, "account", ""),
+                        "stock_no": getattr(item, "stock_no", ""),
+                        "buy_sell": str(getattr(item, "buy_sell", "")).split(".")[-1],  # 轉為字串
+                        "order_type": str(getattr(item, "order_type", "")).split(".")[-1],  # 轉為字串
+                        "filled_qty": getattr(item, "filled_qty", 0),
+                        "filled_avg_price": getattr(item, "filled_avg_price", 0.0),
+                        "realized_profit_and_loss": getattr(item, "realized_profit_and_loss", 0),
+                    }
+                    processed_data.append(processed_item)
+
+            return {
+                "status": "success",
+                "data": processed_data,
+                "message": f"成功獲取帳戶 {account} 已實現損益彙總，共 {len(processed_data)} 筆記錄",
+            }
+        else:
+            return {"status": "error", "data": None, "message": f"無法獲取帳戶 {account} 已實現損益彙總"}
+
+    except Exception as e:
+        return {"status": "error", "data": None, "message": f"獲取已實現損益彙總失敗: {str(e)}"}
+
+
+@mcp.tool()
+def get_unrealized_pnl(args: Dict) -> dict:
+    """
+    獲取未實現損益資訊
+
+    查詢帳戶的未實現損益記錄，對應官方 SDK `accounting.unrealized_gains_and_loses(account)`。
+
+    ⚠️ 重要用途：
+    - 查詢未實現的損益記錄
+    - 監控持倉部位的損益狀況
+    - 評估投資組合的當前價值
+
+    Args:
+        account (str): 帳戶號碼
+
+    Returns:
+        dict: 成功時返回未實現損益記錄列表，每筆記錄包含以下關鍵字段：
+            - date (str): 查詢當天日期
+            - branch_no (str): 分公司代號
+            - stock_no (str): 股票代碼
+            - buy_sell (str): 買賣別，"Buy" 或 "Sell"
+            - order_type (str): 委託類型，"Stock"、"Margin"、"Short"、"DayTrade" 或 "SBL"
+            - cost_price (float): 成本價
+            - tradable_qty (int): 可交易餘額
+            - today_qty (int): 今日餘額
+            - unrealized_profit (int): 未實現獲利
+            - unrealized_loss (int): 未實現虧損
+
+    Note:
+        **損益計算說明**:
+        - unrealized_profit: 未實現的獲利金額（正數表示獲利）
+        - unrealized_loss: 未實現的損失金額（正數表示損失）
+        - 單筆部位的淨損益 = unrealized_profit - unrealized_loss
+
+        **買賣別說明**:
+        - 現股交易: buy_sell 皆為 "Buy"，以餘額正負號顯示淨買賣部位
+        - 信用交易: buy_sell 為 "Buy" 或 "Sell"，顯示買賣類別
+
+        **委託類型說明**:
+        - Stock: 現股交易
+        - Margin: 融資交易
+        - Short: 融券交易
+        - DayTrade: 當沖先賣交易
+        - SBL: 借券賣出交易
+
+        **餘額說明**:
+        - tradable_qty: 可交易餘額（可以進行交易的數量）
+        - today_qty: 今日餘額（當日新增的部位）
+    """
+    try:
+        validated_args = GetUnrealizedPnLArgs(**args)
+        account = validated_args.account
+
+        # 驗證並獲取帳戶對象
+        account_obj, error = validate_and_get_account(account)
+        if error:
+            return {"status": "error", "data": None, "message": error}
+
+        # 獲取未實現損益
+        unrealized_pnl = sdk.accounting.unrealized_gains_and_loses(account_obj)
+        if unrealized_pnl and hasattr(unrealized_pnl, "is_success") and unrealized_pnl.is_success:
+            # 處理數據，將枚舉轉為字串
+            processed_data = []
+            if hasattr(unrealized_pnl, "data") and unrealized_pnl.data:
+                for item in unrealized_pnl.data:
+                    processed_item = {
+                        "date": getattr(item, "date", ""),
+                        "branch_no": getattr(item, "branch_no", ""),
+                        "stock_no": getattr(item, "stock_no", ""),
+                        "buy_sell": str(getattr(item, "buy_sell", "")).split(".")[-1],  # 轉為字串
+                        "order_type": str(getattr(item, "order_type", "")).split(".")[-1],  # 轉為字串
+                        "cost_price": getattr(item, "cost_price", 0.0),
+                        "tradable_qty": getattr(item, "tradable_qty", 0),
+                        "today_qty": getattr(item, "today_qty", 0),
+                        "unrealized_profit": getattr(item, "unrealized_profit", 0),
+                        "unrealized_loss": getattr(item, "unrealized_loss", 0),
+                    }
+                    processed_data.append(processed_item)
+
+            return {
+                "status": "success",
+                "data": processed_data,
+                "message": f"成功獲取帳戶 {account} 未實現損益，共 {len(processed_data)} 筆記錄",
+            }
+        else:
+            return {"status": "error", "data": None, "message": f"無法獲取帳戶 {account} 未實現損益"}
+
+    except Exception as e:
+        return {"status": "error", "data": None, "message": f"獲取未實現損益失敗: {str(e)}"}
+
+
+@mcp.tool()
+def get_maintenance(args: Dict) -> dict:
+    """
+    獲取帳戶維護保證金資訊
+
+    查詢帳戶的維護保證金相關資訊，對應官方 SDK `accounting.get_maintenance(account)`。
+
+    ⚠️ 重要用途：
+    - 查詢帳戶的維護保證金比率
+    - 監控融資融券的保證金使用狀況
+    - 評估帳戶的財務風險
+
+    Args:
+        account (str): 帳戶號碼
+
+    Returns:
+        dict: 成功時返回維護保證金資訊，包含以下關鍵字段：
+            - maintenance_ratio (float): 維護保證金比率
+            - summary (dict): 總計資訊
+                - total_market_value (float): 總市值
+                - total_maintenance_margin (float): 總維護保證金
+                - total_equity (float): 總權益
+                - total_margin_balance (float): 總融資餘額
+                - total_short_balance (float): 總融券餘額
+            - details (list): 明細列表，每筆包含：
+                - stock_no (str): 股票代碼
+                - quantity (int): 持有股數
+                - market_price (float): 市場價格
+                - market_value (float): 市值
+                - maintenance_margin (float): 維護保證金
+                - equity (float): 權益
+                - margin_balance (float): 融資餘額
+                - short_balance (float): 融券餘額
+
+    Note:
+        **維護保證金說明**:
+        - maintenance_ratio: 帳戶需要維持的最低保證金比率
+        - 當帳戶權益低於維護保證金要求時，可能會收到追繳保證金通知
+
+        **融資融券相關**:
+        - margin_balance: 融資餘額（向券商借錢買股票）
+        - short_balance: 融券餘額（向券商借股票賣出）
+        - equity: 帳戶權益 = 市值 - 融資餘額 + 融券餘額
+    """
+    try:
+        validated_args = GetMaintenanceArgs(**args)
+        account = validated_args.account
+
+        # 驗證並獲取帳戶對象
+        account_obj, error = validate_and_get_account(account)
+        if error:
+            return {"status": "error", "data": None, "message": error}
+
+        # 獲取維護保證金資訊
+        maintenance = sdk.accounting.get_maintenance(account_obj)
+        if maintenance and hasattr(maintenance, "is_success") and maintenance.is_success:
+            # 處理數據
+            processed_data = {}
+            if hasattr(maintenance, "data") and maintenance.data:
+                data = maintenance.data
+
+                # 處理總計資訊
+                summary_data = getattr(data, "summary", None)
+                if summary_data:
+                    processed_summary = {
+                        "total_market_value": getattr(summary_data, "total_market_value", 0.0),
+                        "total_maintenance_margin": getattr(summary_data, "total_maintenance_margin", 0.0),
+                        "total_equity": getattr(summary_data, "total_equity", 0.0),
+                        "total_margin_balance": getattr(summary_data, "total_margin_balance", 0.0),
+                        "total_short_balance": getattr(summary_data, "total_short_balance", 0.0),
+                    }
+                else:
+                    processed_summary = {
+                        "total_market_value": 0.0,
+                        "total_maintenance_margin": 0.0,
+                        "total_equity": 0.0,
+                        "total_margin_balance": 0.0,
+                        "total_short_balance": 0.0,
+                    }
+
+                # 處理明細列表
+                details_data = getattr(data, "details", [])
+                processed_details = []
+                if details_data:
+                    for item in details_data:
+                        processed_item = {
+                            "stock_no": getattr(item, "stock_no", ""),
+                            "quantity": getattr(item, "quantity", 0),
+                            "market_price": getattr(item, "market_price", 0.0),
+                            "market_value": getattr(item, "market_value", 0.0),
+                            "maintenance_margin": getattr(item, "maintenance_margin", 0.0),
+                            "equity": getattr(item, "equity", 0.0),
+                            "margin_balance": getattr(item, "margin_balance", 0.0),
+                            "short_balance": getattr(item, "short_balance", 0.0),
+                        }
+                        processed_details.append(processed_item)
+
+                processed_data = {
+                    "maintenance_ratio": getattr(data, "maintenance_ratio", 0.0),
+                    "summary": processed_summary,
+                    "details": processed_details,
+                }
+
+            return {
+                "status": "success",
+                "data": processed_data,
+                "message": f"成功獲取帳戶 {account} 維護保證金資訊，共 {len(processed_data.get('details', []))} 筆明細",
+            }
+        else:
+            return {"status": "error", "data": None, "message": f"無法獲取帳戶 {account} 維護保證金資訊"}
+
+    except Exception as e:
+        return {"status": "error", "data": None, "message": f"獲取維護保證金資訊失敗: {str(e)}"}
 
 
 def main():

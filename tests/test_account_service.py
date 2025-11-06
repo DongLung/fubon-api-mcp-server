@@ -102,12 +102,34 @@ class TestGetUnrealizedPnL:
 
     def test_get_unrealized_pnl_success(self, mock_accounts, mock_sdk, mock_server_globals):
         """Test get_unrealized_pnl success."""
-        mock_sdk.accounting.unrealized_gains_and_loses.return_value = Mock(is_success=True, data="pnl_data")
+        # Mock the API response with data that will be processed
+        mock_item = Mock()
+        mock_item.date = "2024-01-01"
+        mock_item.branch_no = "001"
+        mock_item.stock_no = "2330"
+        mock_item.buy_sell = Mock()
+        mock_item.buy_sell.__str__ = Mock(return_value="BSAction.Buy")
+        mock_item.order_type = Mock()
+        mock_item.order_type.__str__ = Mock(return_value="OrderType.Stock")
+        mock_item.cost_price = 500.0
+        mock_item.tradable_qty = 1000
+        mock_item.today_qty = 100
+        mock_item.unrealized_profit = 5000
+        mock_item.unrealized_loss = 0
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = [mock_item]
+        mock_sdk.accounting.unrealized_gains_and_loses.return_value = mock_result
 
         result = get_unrealized_pnl({"account": "123456"})
 
         assert result["status"] == "success"
-        assert result["data"] == "pnl_data"
+        assert isinstance(result["data"], list)
+        assert len(result["data"]) == 1
+        assert result["data"][0]["stock_no"] == "2330"
+        assert result["data"][0]["buy_sell"] == "Buy"
+        assert result["data"][0]["order_type"] == "Stock"
         assert "成功獲取帳戶 123456 未實現損益" in result["message"]
 
 

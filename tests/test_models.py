@@ -21,11 +21,14 @@ from fubon_api_mcp_server.server import (
     GetIntradayTradesArgs,
     GetIntradayVolumesArgs,
     GetInventoryArgs,
+    GetMaintenanceArgs,
     GetMarginQuotaArgs,
     GetOrderChangedReportsArgs,
     GetOrderReportsArgs,
     GetOrderResultsArgs,
     GetOrderResultsDetailArgs,
+    GetRealizedPnLArgs,
+    GetRealizedPnLSummaryArgs,
     GetRealtimeQuotesArgs,
     GetSettlementArgs,
     GetSnapshotActivesArgs,
@@ -66,14 +69,37 @@ class TestAccountArgs:
         """Test GetSettlementArgs with valid data."""
         args = GetSettlementArgs(account="123456")
         assert args.account == "123456"
-        assert args.days == "0d"
+        assert args.range == "0d"
 
-        args = GetSettlementArgs(account="123456", days="1d")
-        assert args.days == "1d"
+        args = GetSettlementArgs(account="123456", range="3d")
+        assert args.range == "3d"
+
+    def test_get_settlement_args_invalid_range(self):
+        """Test GetSettlementArgs with invalid range values."""
+        with pytest.raises(ValidationError):
+            GetSettlementArgs(account="123456", range="1d")  # Invalid range value
+
+        with pytest.raises(ValidationError):
+            GetSettlementArgs(account="123456", range="invalid")  # Invalid format
 
     def test_get_unrealized_pnl_args_valid(self):
         """Test GetUnrealizedPnLArgs with valid data."""
         args = GetUnrealizedPnLArgs(account="123456")
+        assert args.account == "123456"
+
+    def test_get_realized_pnl_args_valid(self):
+        """Test GetRealizedPnLArgs with valid data."""
+        args = GetRealizedPnLArgs(account="123456")
+        assert args.account == "123456"
+
+    def test_get_maintenance_args_valid(self):
+        """Test GetMaintenanceArgs with valid data."""
+        args = GetMaintenanceArgs(account="123456")
+        assert args.account == "123456"
+
+    def test_get_realized_pnl_summary_args_valid(self):
+        """Test GetRealizedPnLSummaryArgs with valid data."""
+        args = GetRealizedPnLSummaryArgs(account="123456")
         assert args.account == "123456"
 
     def test_get_margin_quota_args_valid(self):
@@ -96,6 +122,33 @@ class TestMarketDataArgs:
         """Test GetIntradayTickersArgs with valid data."""
         args = GetIntradayTickersArgs(market="TSE")
         assert args.market == "TSE"
+        assert args.type is None
+        assert args.exchange is None
+        assert args.industry is None
+        assert args.isNormal is None
+        assert args.isAttention is None
+        assert args.isDisposition is None
+        assert args.isHalted is None
+
+        # Test with all optional parameters
+        args = GetIntradayTickersArgs(
+            market="TSE",
+            type="COMMONSTOCK",
+            exchange="TSE",
+            industry="電子業",
+            isNormal=True,
+            isAttention=False,
+            isDisposition=False,
+            isHalted=False
+        )
+        assert args.market == "TSE"
+        assert args.type == "COMMONSTOCK"
+        assert args.exchange == "TSE"
+        assert args.industry == "電子業"
+        assert args.isNormal is True
+        assert args.isAttention is False
+        assert args.isDisposition is False
+        assert args.isHalted is False
 
     def test_get_intraday_ticker_args_valid(self):
         """Test GetIntradayTickerArgs with valid data."""
