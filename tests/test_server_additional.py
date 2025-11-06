@@ -53,12 +53,9 @@ class TestHistoricalDataProcessing:
 
     def test_process_historical_data(self):
         """Test historical data processing."""
-        df = pd.DataFrame({
-            "date": ["2023-01-01", "2023-01-02"],
-            "open": [100, 101],
-            "close": [105, 106],
-            "volume": [1000, 1100]
-        })
+        df = pd.DataFrame(
+            {"date": ["2023-01-01", "2023-01-02"], "open": [100, 101], "close": [105, 106], "volume": [1000, 1100]}
+        )
 
         processed = process_historical_data(df)
 
@@ -70,8 +67,7 @@ class TestHistoricalDataProcessing:
 
     def test_read_local_stock_data_exists(self):
         """Test reading existing local stock data."""
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("pandas.read_csv") as mock_read_csv:
+        with patch("pathlib.Path.exists", return_value=True), patch("pandas.read_csv") as mock_read_csv:
 
             mock_df = pd.DataFrame({"date": ["2023-01-01"], "close": [100]})
             mock_read_csv.return_value = mock_df
@@ -88,10 +84,12 @@ class TestHistoricalDataProcessing:
 
     def test_save_to_local_csv(self):
         """Test saving data to local CSV."""
-        with patch("pathlib.Path.exists", return_value=False), \
-             patch("pandas.DataFrame.to_csv") as mock_to_csv, \
-             patch("shutil.move") as mock_move, \
-             patch("tempfile.NamedTemporaryFile") as mock_temp_file:
+        with (
+            patch("pathlib.Path.exists", return_value=False),
+            patch("pandas.DataFrame.to_csv") as mock_to_csv,
+            patch("shutil.move") as mock_move,
+            patch("tempfile.NamedTemporaryFile") as mock_temp_file,
+        ):
 
             mock_temp_file.return_value.__enter__.return_value.name = "temp.csv"
 
@@ -175,33 +173,27 @@ class TestHistoricalCandlesIntegration:
             mock_local.return_value = {
                 "status": "success",
                 "data": [{"date": "2023-01-01", "close": 100}],
-                "message": "Local data"
+                "message": "Local data",
             }
 
-            result = historical_candles({
-                "symbol": "2330",
-                "from_date": "2023-01-01",
-                "to_date": "2023-01-02"
-            })
+            result = historical_candles({"symbol": "2330", "from_date": "2023-01-01", "to_date": "2023-01-02"})
 
             assert result["status"] == "success"
             assert len(result["data"]) == 1
 
     def test_historical_candles_api_fallback(self, mock_server_globals, mock_sdk):
         """Test historical candles falling back to API."""
-        with patch("fubon_api_mcp_server.server._get_local_historical_data", return_value=None), \
-             patch("fubon_api_mcp_server.server._fetch_api_historical_data") as mock_api, \
-             patch("fubon_api_mcp_server.server.process_historical_data") as mock_process, \
-             patch("fubon_api_mcp_server.server.save_to_local_csv") as mock_save:
+        with (
+            patch("fubon_api_mcp_server.server._get_local_historical_data", return_value=None),
+            patch("fubon_api_mcp_server.server._fetch_api_historical_data") as mock_api,
+            patch("fubon_api_mcp_server.server.process_historical_data") as mock_process,
+            patch("fubon_api_mcp_server.server.save_to_local_csv") as mock_save,
+        ):
 
             mock_api.return_value = [{"date": "2023-01-01", "close": 100}]
             mock_process.return_value = pd.DataFrame([{"date": "2023-01-01", "close": 100}])
 
-            result = historical_candles({
-                "symbol": "2330",
-                "from_date": "2023-01-01",
-                "to_date": "2023-01-02"
-            })
+            result = historical_candles({"symbol": "2330", "from_date": "2023-01-01", "to_date": "2023-01-02"})
 
             assert result["status"] == "success"
             mock_api.assert_called_once()
@@ -209,13 +201,12 @@ class TestHistoricalCandlesIntegration:
 
     def test_get_local_historical_data_success(self):
         """Test getting local historical data successfully."""
-        with patch("fubon_api_mcp_server.server.read_local_stock_data") as mock_read, \
-             patch("fubon_api_mcp_server.server.process_historical_data") as mock_process:
+        with (
+            patch("fubon_api_mcp_server.server.read_local_stock_data") as mock_read,
+            patch("fubon_api_mcp_server.server.process_historical_data") as mock_process,
+        ):
 
-            mock_df = pd.DataFrame({
-                "date": ["2023-01-01", "2023-01-02"],
-                "close": [100, 101]
-            })
+            mock_df = pd.DataFrame({"date": ["2023-01-01", "2023-01-02"], "close": [100, 101]})
             mock_read.return_value = mock_df
             mock_process.return_value = mock_df
 

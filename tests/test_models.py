@@ -139,7 +139,7 @@ class TestMarketDataArgs:
             isNormal=True,
             isAttention=False,
             isDisposition=False,
-            isHalted=False
+            isHalted=False,
         )
         assert args.market == "TSE"
         assert args.type == "COMMONSTOCK"
@@ -236,11 +236,7 @@ class TestMarketDataArgs:
         assert args.stock_type == ["Stock"]
 
         # Test with custom parameters
-        args = QuerySymbolSnapshotArgs(
-            account="123456",
-            market_type="IntradayOdd",
-            stock_type=["Stock", "CovertBond"]
-        )
+        args = QuerySymbolSnapshotArgs(account="123456", market_type="IntradayOdd", stock_type=["Stock", "CovertBond"])
         assert args.account == "123456"
         assert args.market_type == "IntradayOdd"
         assert args.stock_type == ["Stock", "CovertBond"]

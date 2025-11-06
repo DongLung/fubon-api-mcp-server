@@ -43,48 +43,50 @@ class TestConditionOrderFunctions:
         mock_result.data.guid = "test-guid-123"
         mock_sdk.stock.single_condition.return_value = mock_result
 
-        result = place_condition_order({
-            "account": "123456",
-            "start_date": "20241106",
-            "end_date": "20241107",
-            "stop_sign": "Full",
-            "condition": {
-                "market_type": "Reference",
-                "symbol": "2330",
-                "trigger": "MatchedPrice",
-                "trigger_value": "850",
-                "comparison": "GreaterThan"
-            },
-            "order": {
-                "buy_sell": "Buy",
-                "symbol": "2330",
-                "price": "850",
-                "quantity": 1000,
-                "market_type": "Common",
-                "price_type": "Limit",
-                "time_in_force": "ROD",
-                "order_type": "Stock"
-            },
-            "tpsl": {
+        result = place_condition_order(
+            {
+                "account": "123456",
+                "start_date": "20241106",
+                "end_date": "20241107",
                 "stop_sign": "Full",
-                "tp": {
-                    "target_price": "900",
-                    "price": "900",
-                    "time_in_force": "ROD",
-                    "price_type": "Limit",
-                    "order_type": "Stock"
+                "condition": {
+                    "market_type": "Reference",
+                    "symbol": "2330",
+                    "trigger": "MatchedPrice",
+                    "trigger_value": "850",
+                    "comparison": "GreaterThan",
                 },
-                "sl": {
-                    "target_price": "800",
-                    "price": "800",
-                    "time_in_force": "ROD",
+                "order": {
+                    "buy_sell": "Buy",
+                    "symbol": "2330",
+                    "price": "850",
+                    "quantity": 1000,
+                    "market_type": "Common",
                     "price_type": "Limit",
-                    "order_type": "Stock"
+                    "time_in_force": "ROD",
+                    "order_type": "Stock",
                 },
-                "end_date": "20241108",
-                "intraday": False
+                "tpsl": {
+                    "stop_sign": "Full",
+                    "tp": {
+                        "target_price": "900",
+                        "price": "900",
+                        "time_in_force": "ROD",
+                        "price_type": "Limit",
+                        "order_type": "Stock",
+                    },
+                    "sl": {
+                        "target_price": "800",
+                        "price": "800",
+                        "time_in_force": "ROD",
+                        "price_type": "Limit",
+                        "order_type": "Stock",
+                    },
+                    "end_date": "20241108",
+                    "intraday": False,
+                },
             }
-        })
+        )
 
         assert result["status"] == "success"
         assert result["data"]["guid"] == "test-guid-123"
@@ -102,29 +104,31 @@ class TestConditionOrderFunctions:
         mock_result.data.guid = "test-guid-456"
         mock_sdk.stock.single_condition.return_value = mock_result
 
-        result = place_condition_order({
-            "account": "123456",
-            "start_date": "20241106",
-            "end_date": "20241107",
-            "stop_sign": "Full",
-            "condition": {
-                "market_type": "Reference",
-                "symbol": "2330",
-                "trigger": "MatchedPrice",
-                "trigger_value": "850",
-                "comparison": "GreaterThan"
-            },
-            "order": {
-                "buy_sell": "Buy",
-                "symbol": "2330",
-                "price": "850",
-                "quantity": 1000,
-                "market_type": "Common",
-                "price_type": "Limit",
-                "time_in_force": "ROD",
-                "order_type": "Stock"
+        result = place_condition_order(
+            {
+                "account": "123456",
+                "start_date": "20241106",
+                "end_date": "20241107",
+                "stop_sign": "Full",
+                "condition": {
+                    "market_type": "Reference",
+                    "symbol": "2330",
+                    "trigger": "MatchedPrice",
+                    "trigger_value": "850",
+                    "comparison": "GreaterThan",
+                },
+                "order": {
+                    "buy_sell": "Buy",
+                    "symbol": "2330",
+                    "price": "850",
+                    "quantity": 1000,
+                    "market_type": "Common",
+                    "price_type": "Limit",
+                    "time_in_force": "ROD",
+                    "order_type": "Stock",
+                },
             }
-        })
+        )
 
         assert result["status"] == "success"
         assert result["data"]["has_tpsl"] is False
@@ -141,38 +145,40 @@ class TestConditionOrderFunctions:
         mock_result.data.guid = "multi-guid-123"
         mock_sdk.stock.multi_condition.return_value = mock_result
 
-        result = place_multi_condition_order({
-            "account": "123456",
-            "start_date": "20241106",
-            "end_date": "20241107",
-            "stop_sign": "Full",
-            "conditions": [
-                {
-                    "market_type": "Reference",
+        result = place_multi_condition_order(
+            {
+                "account": "123456",
+                "start_date": "20241106",
+                "end_date": "20241107",
+                "stop_sign": "Full",
+                "conditions": [
+                    {
+                        "market_type": "Reference",
+                        "symbol": "2330",
+                        "trigger": "MatchedPrice",
+                        "trigger_value": "850",
+                        "comparison": "GreaterThan",
+                    },
+                    {
+                        "market_type": "Reference",
+                        "symbol": "2330",
+                        "trigger": "TotalQuantity",
+                        "trigger_value": "10000",
+                        "comparison": "GreaterThan",
+                    },
+                ],
+                "order": {
+                    "buy_sell": "Buy",
                     "symbol": "2330",
-                    "trigger": "MatchedPrice",
-                    "trigger_value": "850",
-                    "comparison": "GreaterThan"
+                    "price": "850",
+                    "quantity": 1000,
+                    "market_type": "Common",
+                    "price_type": "Limit",
+                    "time_in_force": "ROD",
+                    "order_type": "Stock",
                 },
-                {
-                    "market_type": "Reference",
-                    "symbol": "2330",
-                    "trigger": "TotalQuantity",
-                    "trigger_value": "10000",
-                    "comparison": "GreaterThan"
-                }
-            ],
-            "order": {
-                "buy_sell": "Buy",
-                "symbol": "2330",
-                "price": "850",
-                "quantity": 1000,
-                "market_type": "Common",
-                "price_type": "Limit",
-                "time_in_force": "ROD",
-                "order_type": "Stock"
             }
-        })
+        )
 
         assert result["status"] == "success"
         assert result["data"]["conditions_count"] == 2
@@ -189,39 +195,35 @@ class TestConditionOrderFunctions:
         mock_result.data.guid = "daytrade-guid-123"
         mock_sdk.stock.single_condition_day_trade.return_value = mock_result
 
-        result = place_daytrade_condition_order({
-            "account": "123456",
-            "stop_sign": "Full",
-            "end_time": "130000",
-            "condition": {
-                "market_type": "Reference",
-                "symbol": "2330",
-                "trigger": "MatchedPrice",
-                "trigger_value": "850",
-                "comparison": "GreaterThan"
-            },
-            "order": {
-                "buy_sell": "Buy",
-                "symbol": "2330",
-                "price": "850",
-                "quantity": 1000,
-                "market_type": "Common",
-                "price_type": "Limit",
-                "time_in_force": "ROD",
-                "order_type": "Stock"
-            },
-            "daytrade": {
-                "day_trade_end_time": "131500",
-                "auto_cancel": True,
-                "price": "",
-                "price_type": "Market"
-            },
-            "fix_session": True
-        })
+        result = place_daytrade_condition_order(
+            {
+                "account": "123456",
+                "stop_sign": "Full",
+                "end_time": "130000",
+                "condition": {
+                    "market_type": "Reference",
+                    "symbol": "2330",
+                    "trigger": "MatchedPrice",
+                    "trigger_value": "850",
+                    "comparison": "GreaterThan",
+                },
+                "order": {
+                    "buy_sell": "Buy",
+                    "symbol": "2330",
+                    "price": "850",
+                    "quantity": 1000,
+                    "market_type": "Common",
+                    "price_type": "Limit",
+                    "time_in_force": "ROD",
+                    "order_type": "Stock",
+                },
+                "daytrade": {"day_trade_end_time": "131500", "auto_cancel": True, "price": "", "price_type": "Market"},
+                "fix_session": True,
+            }
+        )
 
         assert result["status"] == "success"
         assert result["data"]["guid"] == "daytrade-guid-123"
-
 
     @patch("fubon_api_mcp_server.server.validate_and_get_account")
     @patch("fubon_api_mcp_server.server.sdk")
@@ -235,63 +237,60 @@ class TestConditionOrderFunctions:
         mock_result.data.guid = "daytrade-multi-guid-123"
         mock_sdk.stock.multi_condition_day_trade.return_value = mock_result
 
-        result = place_daytrade_multi_condition_order({
-            "account": "123456",
-            "stop_sign": "Full",
-            "end_time": "130000",
-            "conditions": [
-                {
-                    "market_type": "Reference",
-                    "symbol": "2330",
-                    "trigger": "MatchedPrice",
-                    "trigger_value": "850",
-                    "comparison": "GreaterThan"
-                },
-                {
-                    "market_type": "Reference",
-                    "symbol": "2330",
-                    "trigger": "TotalQuantity",
-                    "trigger_value": "10000",
-                    "comparison": "GreaterThan"
-                }
-            ],
-            "order": {
-                "buy_sell": "Buy",
-                "symbol": "2330",
-                "price": "850",
-                "quantity": 1000,
-                "market_type": "Common",
-                "price_type": "Limit",
-                "time_in_force": "ROD",
-                "order_type": "Stock"
-            },
-            "daytrade": {
-                "day_trade_end_time": "131500",
-                "auto_cancel": True,
-                "price": "",
-                "price_type": "Market"
-            },
-            "tpsl": {
+        result = place_daytrade_multi_condition_order(
+            {
+                "account": "123456",
                 "stop_sign": "Full",
-                "tp": {
-                    "target_price": "900",
-                    "price": "900",
-                    "time_in_force": "ROD",
+                "end_time": "130000",
+                "conditions": [
+                    {
+                        "market_type": "Reference",
+                        "symbol": "2330",
+                        "trigger": "MatchedPrice",
+                        "trigger_value": "850",
+                        "comparison": "GreaterThan",
+                    },
+                    {
+                        "market_type": "Reference",
+                        "symbol": "2330",
+                        "trigger": "TotalQuantity",
+                        "trigger_value": "10000",
+                        "comparison": "GreaterThan",
+                    },
+                ],
+                "order": {
+                    "buy_sell": "Buy",
+                    "symbol": "2330",
+                    "price": "850",
+                    "quantity": 1000,
+                    "market_type": "Common",
                     "price_type": "Limit",
-                    "order_type": "Stock"
-                },
-                "sl": {
-                    "target_price": "800",
-                    "price": "800",
                     "time_in_force": "ROD",
-                    "price_type": "Limit",
-                    "order_type": "Stock"
+                    "order_type": "Stock",
                 },
-                "end_date": "20241108",
-                "intraday": False
-            },
-            "fix_session": True
-        })
+                "daytrade": {"day_trade_end_time": "131500", "auto_cancel": True, "price": "", "price_type": "Market"},
+                "tpsl": {
+                    "stop_sign": "Full",
+                    "tp": {
+                        "target_price": "900",
+                        "price": "900",
+                        "time_in_force": "ROD",
+                        "price_type": "Limit",
+                        "order_type": "Stock",
+                    },
+                    "sl": {
+                        "target_price": "800",
+                        "price": "800",
+                        "time_in_force": "ROD",
+                        "price_type": "Limit",
+                        "order_type": "Stock",
+                    },
+                    "end_date": "20241108",
+                    "intraday": False,
+                },
+                "fix_session": True,
+            }
+        )
 
         assert result["status"] == "success"
         assert result["data"]["guid"] == "daytrade-multi-guid-123"
@@ -314,24 +313,26 @@ class TestTrailProfitFunctions:
         mock_result.data.guid = "trail-guid-123"
         mock_sdk.stock.trail_profit.return_value = mock_result
 
-        result = place_trail_profit({
-            "account": "123456",
-            "start_date": "20241106",
-            "end_date": "20241107",
-            "stop_sign": "Full",
-            "trail": {
-                "symbol": "2330",
-                "price": "850",
-                "direction": "Up",
-                "percentage": 5,
-                "buysell": "Buy",
-                "quantity": 1000,
-                "price_type": "MatchedPrice",
-                "diff": 5,
-                "time_in_force": "ROD",
-                "order_type": "Stock"
+        result = place_trail_profit(
+            {
+                "account": "123456",
+                "start_date": "20241106",
+                "end_date": "20241107",
+                "stop_sign": "Full",
+                "trail": {
+                    "symbol": "2330",
+                    "price": "850",
+                    "direction": "Up",
+                    "percentage": 5,
+                    "buysell": "Buy",
+                    "quantity": 1000,
+                    "price_type": "MatchedPrice",
+                    "diff": 5,
+                    "time_in_force": "ROD",
+                    "order_type": "Stock",
+                },
             }
-        })
+        )
 
         assert result["status"] == "success"
         assert result["data"]["guid"] == "trail-guid-123"
@@ -365,11 +366,7 @@ class TestTrailProfitFunctions:
         mock_result.data = [{"guid": "trail-1", "symbol": "2330", "status": "Completed"}]
         mock_sdk.stock.get_trail_history.return_value = mock_result
 
-        result = get_trail_history({
-            "account": "123456",
-            "start_date": "20241101",
-            "end_date": "20241107"
-        })
+        result = get_trail_history({"account": "123456", "start_date": "20241101", "end_date": "20241107"})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 1
@@ -388,38 +385,40 @@ class TestTimeSliceOrderFunctions:
         # Create mock SmartOrderResponse
         mock_smart_order_response = Mock()
         mock_smart_order_response.guid = "timeslice-guid-123"
-        
+
         # Create mock data as dict with SmartOrderResponse
         mock_data = {"SmartOrderResponse": mock_smart_order_response}
-        
+
         mock_result = Mock()
         mock_result.is_success = True
         mock_result.data = mock_data
         mock_sdk.stock.time_slice_order.return_value = mock_result
 
-        result = place_time_slice_order({
-            "account": "123456",
-            "start_date": "20241106",
-            "end_date": "20241107",
-            "stop_sign": "Full",
-            "split": {
-                "method": "Type1",
-                "interval": 30,
-                "single_quantity": 1000,
-                "total_quantity": 5000,
-                "start_time": "090000"
-            },
-            "order": {
-                "buy_sell": "Buy",
-                "symbol": "2330",
-                "price": "850",
-                "quantity": 5000,
-                "market_type": "Common",
-                "price_type": "Limit",
-                "time_in_force": "ROD",
-                "order_type": "Stock"
+        result = place_time_slice_order(
+            {
+                "account": "123456",
+                "start_date": "20241106",
+                "end_date": "20241107",
+                "stop_sign": "Full",
+                "split": {
+                    "method": "Type1",
+                    "interval": 30,
+                    "single_quantity": 1000,
+                    "total_quantity": 5000,
+                    "start_time": "090000",
+                },
+                "order": {
+                    "buy_sell": "Buy",
+                    "symbol": "2330",
+                    "price": "850",
+                    "quantity": 5000,
+                    "market_type": "Common",
+                    "price_type": "Limit",
+                    "time_in_force": "ROD",
+                    "order_type": "Stock",
+                },
             }
-        })
+        )
 
         assert result["status"] == "success"
         assert result["data"]["guid"] == "timeslice-guid-123"
@@ -436,10 +435,7 @@ class TestTimeSliceOrderFunctions:
         mock_result.data = [{"batch_no": "TS001", "symbol": "2330"}]
         mock_sdk.stock.get_time_slice_order.return_value = mock_result
 
-        result = get_time_slice_order({
-            "account": "123456",
-            "batch_no": "TS001"
-        })
+        result = get_time_slice_order({"account": "123456", "batch_no": "TS001"})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 1
@@ -460,10 +456,7 @@ class TestConditionOrderManagement:
         mock_result.data.advisory = "Order cancelled successfully"
         mock_sdk.stock.cancel_condition_orders.return_value = mock_result
 
-        result = cancel_condition_order({
-            "account": "123456",
-            "guid": "condition-guid-123"
-        })
+        result = cancel_condition_order({"account": "123456", "guid": "condition-guid-123"})
 
         assert result["status"] == "success"
         assert "advisory" in result["data"]
@@ -497,10 +490,7 @@ class TestConditionOrderManagement:
         mock_result.data = {"guid": "cond-1", "symbol": "2330", "status": "Active"}
         mock_sdk.stock.get_condition_order_by_id.return_value = mock_result
 
-        result = get_condition_order_by_id({
-            "account": "123456",
-            "guid": "cond-1"
-        })
+        result = get_condition_order_by_id({"account": "123456", "guid": "cond-1"})
 
         assert result["status"] == "success"
         assert result["data"]["guid"] == "cond-1"
@@ -517,11 +507,7 @@ class TestConditionOrderManagement:
         mock_result.data = [{"guid": "hist-1", "symbol": "2330"}]
         mock_sdk.stock.get_condition_history.return_value = mock_result
 
-        result = get_condition_history({
-            "account": "123456",
-            "start_date": "20241101",
-            "end_date": "20241107"
-        })
+        result = get_condition_history({"account": "123456", "start_date": "20241101", "end_date": "20241107"})
 
         assert result["status"] == "success"
         assert len(result["data"]) == 1

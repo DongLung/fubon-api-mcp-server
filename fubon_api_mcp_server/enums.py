@@ -29,10 +29,22 @@ from fubon_neo.constant import (
 
 # 類型別名定義
 EnumType = Union[
-    BSAction, ConditionMarketType, ConditionOrderType, ConditionPriceType,
-    ConditionStatus, Direction, HistoryStatus, MarketType, Operator,
-    OrderType, PriceType, StopSign, TimeInForce, TimeSliceOrderType,
-    TradingType, TriggerContent
+    BSAction,
+    ConditionMarketType,
+    ConditionOrderType,
+    ConditionPriceType,
+    ConditionStatus,
+    Direction,
+    HistoryStatus,
+    MarketType,
+    Operator,
+    OrderType,
+    PriceType,
+    StopSign,
+    TimeInForce,
+    TimeSliceOrderType,
+    TradingType,
+    TriggerContent,
 ]
 
 
@@ -60,6 +72,7 @@ def safe_enum_conversion(enum_class: type, value: str, default: Optional[EnumTyp
 
 
 # 具體的枚舉轉換函數，帶有正確的類型註解
+
 
 def to_bs_action(value: str) -> BSAction:
     """將字串轉換為 BSAction 枚舉"""
@@ -145,7 +158,7 @@ def to_stock_types(values: list) -> list:
     """將字串列表轉換為 StockType 枚舉列表"""
     if not values:
         return [StockType.Stock]  # 預設值
-    
+
     result = []
     for value in values:
         # 處理用戶文檔中的名稱映射
@@ -154,22 +167,24 @@ def to_stock_types(values: list) -> list:
         elif value == "ETF_and_ETN":
             value = "EtfAndEtn"
         # "Stock" 保持不變
-        
+
         enum_value = safe_enum_conversion(StockType, value)
         if enum_value:
             result.append(enum_value)
-    
+
     return result if result else [StockType.Stock]
 
 
 # 枚舉值到字串的轉換函數（用於序列化）
 
+
 def enum_to_string(enum_value: EnumType) -> str:
     """將枚舉值轉換為字串"""
-    return enum_value.name if hasattr(enum_value, 'name') else str(enum_value)
+    return enum_value.name if hasattr(enum_value, "name") else str(enum_value)
 
 
 # 枚舉驗證函數
+
 
 def validate_enum_value(enum_class: type, value: str) -> bool:
     """驗證字串是否為有效的枚舉值"""
@@ -183,43 +198,28 @@ def validate_enum_value(enum_class: type, value: str) -> bool:
 # 枚舉文檔和說明
 
 ENUM_DOCUMENTATION = {
-    BSAction: {
-        "Buy": "買",
-        "Sell": "賣"
-    },
-    ConditionMarketType: {
-        "Common": "一般盤",
-        "Fixing": "定盤",
-        "IntradayOdd": "盤中零股",
-        "Odd": "盤後零股"
-    },
-    TradingType: {
-        "Reference": "自動參考委託物件",
-        "Scheduled": "時間"
-    },
+    BSAction: {"Buy": "買", "Sell": "賣"},
+    ConditionMarketType: {"Common": "一般盤", "Fixing": "定盤", "IntradayOdd": "盤中零股", "Odd": "盤後零股"},
+    TradingType: {"Reference": "自動參考委託物件", "Scheduled": "時間"},
     TriggerContent: {
         "BidPrice": "買進價",
         "AskPrice": "賣出價",
         "MatchedPrice": "成交價",
         "TotalQuantity": "總量",
-        "Time": "時間"
+        "Time": "時間",
     },
     Operator: {
         "GreaterThanOrEqual": "大於等於",
         "LessThanOrEqual": "小於等於",
         "GreaterThan": "大於",
         "LessThan": "小於",
-        "Equal": "等於"
+        "Equal": "等於",
     },
-    StopSign: {
-        "Full": "全部成交為止",
-        "Partial": "部分成交為止",
-        "UntilEnd": "效期結束為止"
-    },
+    StopSign: {"Full": "全部成交為止", "Partial": "部分成交為止", "UntilEnd": "效期結束為止"},
     TimeInForce: {
         "ROD": "當日有效(Rest of Day)",
         "FOK": "全部成交否則取消(Fill-or-Kill)",
-        "IOC": "立即成交否則取消(Immediate-or-Cancel)"
+        "IOC": "立即成交否則取消(Immediate-or-Cancel)",
     },
     ConditionPriceType: {
         "Limit": "限價",
@@ -229,22 +229,14 @@ ENUM_DOCUMENTATION = {
         "MatchedPrice": "成交價",
         "LimitUp": "漲停價",
         "LimitDown": "跌停價",
-        "Reference": "參考價(平盤價)"
+        "Reference": "參考價(平盤價)",
     },
-    ConditionOrderType: {
-        "Stock": "現貨",
-        "Margin": "融資",
-        "Short": "融券",
-        "DayTrade": "當沖"
-    },
-    Direction: {
-        "Up": "上漲",
-        "Down": "下跌"
-    },
+    ConditionOrderType: {"Stock": "現貨", "Margin": "融資", "Short": "融券", "DayTrade": "當沖"},
+    Direction: {"Up": "上漲", "Down": "下跌"},
     TimeSliceOrderType: {
         "Type1": "從開始時間，每隔幾秒送一筆，總共送N筆，每筆送M張",
         "Type2": "從開始到結束，每隔X秒送一筆，總共N張，剩餘張數加總至最後一筆",
-        "Type3": "從開始到結束，每隔X秒送一筆，總共N張，剩餘張數從最後一筆往前分配"
+        "Type3": "從開始到結束，每隔X秒送一筆，總共N張，剩餘張數從最後一筆往前分配",
     },
     ConditionStatus: {
         "Type1": "今日相關查詢",
@@ -257,7 +249,7 @@ ENUM_DOCUMENTATION = {
         "Type8": "已有成交",
         "Type9": "刪除成功",
         "Type10": "異常",
-        "Type11": "失效"
+        "Type11": "失效",
     },
     HistoryStatus: {
         "Type1": "所有條件單 ( 不包含已刪除、失效)",
@@ -265,6 +257,6 @@ ENUM_DOCUMENTATION = {
         "Type3": "選擇期間內部分成交單",
         "Type4": "選擇期間刪除單",
         "Type5": "選擇期間失效單",
-        "Type6": "選擇期間內已觸發記錄"
-    }
+        "Type6": "選擇期間內已觸發記錄",
+    },
 }

@@ -13,12 +13,7 @@ from fubon_neo.sdk import FubonSDK
 # Initialize SDK
 print("正在初始化 SDK...")
 config.sdk = FubonSDK()
-config.accounts = config.sdk.login(
-    config.username, 
-    config.password, 
-    config.pfx_path, 
-    config.pfx_password or ""
-)
+config.accounts = config.sdk.login(config.username, config.password, config.pfx_path, config.pfx_password or "")
 config.sdk.init_realtime()
 config.reststock = config.sdk.marketdata.rest_client.stock
 
@@ -36,7 +31,7 @@ except Exception as e:
 # Test 2: quote with symbol parameter
 try:
     print("\n2. config.reststock.intraday.quote(symbol='2330')")
-    result = config.reststock.intraday.quote(symbol='2330')
+    result = config.reststock.intraday.quote(symbol="2330")
     print(f"   Success! Type: {type(result)}")
     print(f"   Result: {result}")
 except Exception as e:
@@ -45,7 +40,7 @@ except Exception as e:
 # Test 3: quote with positional symbol
 try:
     print("\n3. config.reststock.intraday.quote('2330')")
-    result = config.reststock.intraday.quote('2330')
+    result = config.reststock.intraday.quote("2330")
     print(f"   Success! Type: {type(result)}")
     print(f"   Result: {result}")
 except Exception as e:
@@ -54,5 +49,5 @@ except Exception as e:
 # Test 4: Check if there's a different method
 print("\n4. Available methods in intraday:")
 for attr in dir(config.reststock.intraday):
-    if not attr.startswith('_'):
+    if not attr.startswith("_"):
         print(f"   - {attr}")

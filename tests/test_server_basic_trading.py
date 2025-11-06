@@ -11,10 +11,16 @@ This module tests the core trading functionality including:
 import pytest
 from unittest.mock import patch, MagicMock
 from fubon_api_mcp_server.server import (
-    place_order, cancel_order, modify_price, modify_quantity,
-    get_account_info, get_inventory, get_bank_balance,
-    get_order_results, get_order_results_detail,
-    batch_place_order
+    place_order,
+    cancel_order,
+    modify_price,
+    modify_quantity,
+    get_account_info,
+    get_inventory,
+    get_bank_balance,
+    get_order_results,
+    get_order_results_detail,
+    batch_place_order,
 )
 
 
@@ -28,8 +34,10 @@ class TestBasicTradingFunctions:
         mock_accounts.is_success = True
         mock_accounts.data = [MagicMock(account="123456", name="Test User", branch_no="001", account_type="Stock")]
 
-        with patch('fubon_api_mcp_server.server.accounts', mock_accounts), \
-             patch('fubon_api_mcp_server.server.sdk') as mock_sdk:
+        with (
+            patch("fubon_api_mcp_server.server.accounts", mock_accounts),
+            patch("fubon_api_mcp_server.server.sdk") as mock_sdk,
+        ):
             yield mock_sdk
 
     def test_place_order_success(self, mock_globals):
@@ -42,17 +50,19 @@ class TestBasicTradingFunctions:
         mock_sdk.stock.place_order.return_value = mock_result
 
         # Test
-        result = place_order({
-            "account": "123456",
-            "symbol": "2330",
-            "quantity": 1000,
-            "price": 500.0,
-            "buy_sell": "Buy",
-            "market_type": "Common",
-            "price_type": "Limit",
-            "time_in_force": "ROD",
-            "order_type": "Stock"
-        })
+        result = place_order(
+            {
+                "account": "123456",
+                "symbol": "2330",
+                "quantity": 1000,
+                "price": 500.0,
+                "buy_sell": "Buy",
+                "market_type": "Common",
+                "price_type": "Limit",
+                "time_in_force": "ROD",
+                "order_type": "Stock",
+            }
+        )
 
         # Assert
         assert result["status"] == "success"
@@ -69,13 +79,7 @@ class TestBasicTradingFunctions:
         mock_sdk.stock.place_order.return_value = mock_result
 
         # Test
-        result = place_order({
-            "account": "123456",
-            "symbol": "2330",
-            "quantity": 1000,
-            "price": 500.0,
-            "buy_sell": "Buy"
-        })
+        result = place_order({"account": "123456", "symbol": "2330", "quantity": 1000, "price": 500.0, "buy_sell": "Buy"})
 
         # Assert
         assert result["status"] == "error"
@@ -96,10 +100,7 @@ class TestBasicTradingFunctions:
         mock_sdk.stock.cancel_order.return_value = mock_cancel_result
 
         # Test
-        result = cancel_order({
-            "account": "123456",
-            "order_no": "12345"
-        })
+        result = cancel_order({"account": "123456", "order_no": "12345"})
 
         # Assert
         assert result["status"] == "success"
@@ -116,10 +117,7 @@ class TestBasicTradingFunctions:
         mock_sdk.stock.get_order_results.return_value = mock_order_results
 
         # Test
-        result = cancel_order({
-            "account": "123456",
-            "order_no": "12345"
-        })
+        result = cancel_order({"account": "123456", "order_no": "12345"})
 
         # Assert
         assert result["status"] == "error"
@@ -141,11 +139,7 @@ class TestBasicTradingFunctions:
         mock_sdk.stock.modify_price.return_value = mock_modify_result
 
         # Test
-        result = modify_price({
-            "account": "123456",
-            "order_no": "12345",
-            "new_price": 510.0
-        })
+        result = modify_price({"account": "123456", "order_no": "12345", "new_price": 510.0})
 
         # Assert
         assert result["status"] == "success"
@@ -167,11 +161,7 @@ class TestBasicTradingFunctions:
         mock_sdk.stock.modify_quantity.return_value = mock_modify_result
 
         # Test
-        result = modify_quantity({
-            "account": "123456",
-            "order_no": "12345",
-            "new_quantity": 2000
-        })
+        result = modify_quantity({"account": "123456", "order_no": "12345", "new_quantity": 2000})
 
         # Assert
         assert result["status"] == "success"
@@ -188,8 +178,10 @@ class TestAccountInformationFunctions:
         mock_accounts.is_success = True
         mock_accounts.data = [MagicMock(account="123456", name="Test User", branch_no="001", account_type="Stock")]
 
-        with patch('fubon_api_mcp_server.server.accounts', mock_accounts), \
-             patch('fubon_api_mcp_server.server.sdk') as mock_sdk:
+        with (
+            patch("fubon_api_mcp_server.server.accounts", mock_accounts),
+            patch("fubon_api_mcp_server.server.sdk") as mock_sdk,
+        ):
             yield mock_sdk
 
     def test_get_account_info_success(self, mock_globals):
@@ -213,9 +205,7 @@ class TestAccountInformationFunctions:
         mock_sdk.accounting.query_settlement.return_value = mock_settlement
 
         # Test
-        result = get_account_info({
-            "account": "123456"
-        })
+        result = get_account_info({"account": "123456"})
 
         # Assert
         assert result["status"] == "success"
@@ -229,17 +219,12 @@ class TestAccountInformationFunctions:
         # Setup
         mock_inventory = MagicMock()
         mock_inventory.is_success = True
-        mock_inventory.data = [
-            {"stock_no": "2330", "quantity": 1000},
-            {"stock_no": "2454", "quantity": 500}
-        ]
+        mock_inventory.data = [{"stock_no": "2330", "quantity": 1000}, {"stock_no": "2454", "quantity": 500}]
 
         mock_sdk.accounting.inventories.return_value = mock_inventory
 
         # Test
-        result = get_inventory({
-            "account": "123456"
-        })
+        result = get_inventory({"account": "123456"})
 
         # Assert
         assert result["status"] == "success"
@@ -257,9 +242,7 @@ class TestAccountInformationFunctions:
         mock_sdk.accounting.bank_remain.return_value = mock_balance
 
         # Test
-        result = get_bank_balance({
-            "account": "123456"
-        })
+        result = get_bank_balance({"account": "123456"})
 
         # Assert
         assert result["status"] == "success"
@@ -276,8 +259,10 @@ class TestOrderManagementFunctions:
         mock_accounts.is_success = True
         mock_accounts.data = [MagicMock(account="123456", name="Test User", branch_no="001", account_type="Stock")]
 
-        with patch('fubon_api_mcp_server.server.accounts', mock_accounts), \
-             patch('fubon_api_mcp_server.server.sdk') as mock_sdk:
+        with (
+            patch("fubon_api_mcp_server.server.accounts", mock_accounts),
+            patch("fubon_api_mcp_server.server.sdk") as mock_sdk,
+        ):
             yield mock_sdk
 
     def test_get_order_results_success(self, mock_globals):
@@ -288,15 +273,13 @@ class TestOrderManagementFunctions:
         mock_results.is_success = True
         mock_results.data = [
             {"order_no": "12345", "symbol": "2330", "status": "Filled"},
-            {"order_no": "12346", "symbol": "2454", "status": "Pending"}
+            {"order_no": "12346", "symbol": "2454", "status": "Pending"},
         ]
 
         mock_sdk.stock.get_order_results.return_value = mock_results
 
         # Test
-        result = get_order_results({
-            "account": "123456"
-        })
+        result = get_order_results({"account": "123456"})
 
         # Assert
         assert result["status"] == "success"
@@ -313,16 +296,14 @@ class TestOrderManagementFunctions:
             {
                 "order_no": "12345",
                 "symbol": "2330",
-                "details": [{"modified_time": "2024-01-01", "before_qty": 1000, "after_qty": 500}]
+                "details": [{"modified_time": "2024-01-01", "before_qty": 1000, "after_qty": 500}],
             }
         ]
 
         mock_sdk.stock.get_order_results_detail.return_value = mock_results
 
         # Test
-        result = get_order_results_detail({
-            "account": "123456"
-        })
+        result = get_order_results_detail({"account": "123456"})
 
         # Assert
         assert result["status"] == "success"
@@ -340,8 +321,10 @@ class TestBatchOperations:
         mock_accounts.is_success = True
         mock_accounts.data = [MagicMock(account="123456", name="Test User", branch_no="001", account_type="Stock")]
 
-        with patch('fubon_api_mcp_server.server.accounts', mock_accounts), \
-             patch('fubon_api_mcp_server.server.sdk') as mock_sdk:
+        with (
+            patch("fubon_api_mcp_server.server.accounts", mock_accounts),
+            patch("fubon_api_mcp_server.server.sdk") as mock_sdk,
+        ):
             yield mock_sdk
 
     def test_batch_place_order_success(self, mock_globals):
@@ -353,26 +336,12 @@ class TestBatchOperations:
         mock_sdk.stock.place_order.return_value = mock_result
 
         orders = [
-            {
-                "symbol": "2330",
-                "quantity": 1000,
-                "price": 500.0,
-                "buy_sell": "Buy"
-            },
-            {
-                "symbol": "2454",
-                "quantity": 500,
-                "price": 100.0,
-                "buy_sell": "Sell"
-            }
+            {"symbol": "2330", "quantity": 1000, "price": 500.0, "buy_sell": "Buy"},
+            {"symbol": "2454", "quantity": 500, "price": 100.0, "buy_sell": "Sell"},
         ]
 
         # Test
-        result = batch_place_order({
-            "account": "123456",
-            "orders": orders,
-            "max_workers": 5
-        })
+        result = batch_place_order({"account": "123456", "orders": orders, "max_workers": 5})
 
         # Assert
         assert result["status"] == "success"
@@ -383,39 +352,25 @@ class TestBatchOperations:
     def test_batch_place_order_partial_failure(self, mock_globals):
         """Test batch order placement with partial failures"""
         mock_sdk = mock_globals
-        
+
         # Create mock results: first succeeds, second fails
         success_result = MagicMock()
         success_result.is_success = True
-        
+
         fail_result = MagicMock()
         fail_result.is_success = False
         fail_result.message = "Insufficient funds"
-        
+
         # Set up side_effect to return different results
         mock_sdk.stock.place_order.side_effect = [success_result, fail_result]
 
         orders = [
-            {
-                "symbol": "2330",
-                "quantity": 1000,
-                "price": 500.0,
-                "buy_sell": "Buy"
-            },
-            {
-                "symbol": "2454",
-                "quantity": 500,
-                "price": 100.0,
-                "buy_sell": "Sell"
-            }
+            {"symbol": "2330", "quantity": 1000, "price": 500.0, "buy_sell": "Buy"},
+            {"symbol": "2454", "quantity": 500, "price": 100.0, "buy_sell": "Sell"},
         ]
 
         # Test
-        result = batch_place_order({
-            "account": "123456",
-            "orders": orders,
-            "max_workers": 5
-        })
+        result = batch_place_order({"account": "123456", "orders": orders, "max_workers": 5})
 
         # Assert
         assert result["status"] == "success"

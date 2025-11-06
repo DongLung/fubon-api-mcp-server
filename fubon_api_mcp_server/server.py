@@ -68,10 +68,23 @@ from pydantic import BaseModel, Field
 
 # 本地模組導入
 from .enums import (
-    to_bs_action, to_market_type, to_order_type, to_price_type, to_time_in_force,
-    to_trading_type, to_trigger_content, to_operator, to_condition_market_type,
-    to_condition_order_type, to_condition_price_type, to_stop_sign, to_direction,
-    to_time_slice_order_type, to_condition_status, to_history_status, to_stock_types
+    to_bs_action,
+    to_market_type,
+    to_order_type,
+    to_price_type,
+    to_time_in_force,
+    to_trading_type,
+    to_trigger_content,
+    to_operator,
+    to_condition_market_type,
+    to_condition_order_type,
+    to_condition_price_type,
+    to_stop_sign,
+    to_direction,
+    to_time_slice_order_type,
+    to_condition_status,
+    to_history_status,
+    to_stock_types,
 )
 
 # 加載環境變數配置
@@ -697,9 +710,7 @@ class ConditionArgs(BaseModel):
         "MatchedPrice"  # 觸發內容：MatchedPrice(成交價), BuyPrice(買價), SellPrice(賣價), TotalQuantity(累計成交量), Time(時間)
     )
     trigger_value: str  # 觸發值
-    comparison: str = (
-        "LessThan"  # 比較運算子：LessThan(<), LessOrEqual(<=), Equal(=), Greater(>), GreaterOrEqual(>=)
-    )
+    comparison: str = "LessThan"  # 比較運算子：LessThan(<), LessOrEqual(<=), Equal(=), Greater(>), GreaterOrEqual(>=)
 
 
 class ConditionOrderArgs(BaseModel):
@@ -822,7 +833,9 @@ class TimeSliceSplitArgs(BaseModel):
             if self.total_quantity is None:
                 self.total_quantity = self.split_count * self.single_quantity
             elif self.total_quantity != self.split_count * self.single_quantity:
-                raise ValueError(f"total_quantity ({self.total_quantity}) 與 split_count * single_quantity ({self.split_count * self.single_quantity}) 不一致")
+                raise ValueError(
+                    f"total_quantity ({self.total_quantity}) 與 split_count * single_quantity ({self.split_count * self.single_quantity}) 不一致"
+                )
 
         if self.total_quantity is not None and self.total_quantity <= self.single_quantity:
             raise ValueError("total_quantity 必須大於 single_quantity")
@@ -2153,6 +2166,8 @@ def query_symbol_snapshot(args: Dict) -> dict:
 
     except Exception as e:
         return {"status": "error", "data": None, "message": f"批量獲取商品報價失敗: {str(e)}"}
+
+
 @mcp.tool()
 def get_intraday_tickers(args: Dict) -> dict:
     """
@@ -2256,10 +2271,10 @@ def get_intraday_ticker(args: Dict) -> dict:
             api_params["type"] = type_param
 
         result = reststock.intraday.ticker(**api_params)
-        
+
         # 處理返回數據
         data = result.dict() if hasattr(result, "dict") else result
-        
+
         # 證券類型代碼對照表
         security_type_mapping = {
             "01": "一般股票",
@@ -2306,14 +2321,14 @@ def get_intraday_ticker(args: Dict) -> dict:
             "42": "中央登錄公債",
             "43": "外國債券",
             "44": "黃金現貨",
-            "00": "未知或保留代碼"
+            "00": "未知或保留代碼",
         }
-        
+
         # 如果數據是字典且包含 securityType，進行轉換
         if isinstance(data, dict) and "securityType" in data:
             security_type_code = str(data["securityType"])
             data["securityTypeName"] = security_type_mapping.get(security_type_code, f"未知代碼({security_type_code})")
-        
+
         return {
             "status": "success",
             "data": data,
@@ -4285,21 +4300,21 @@ def place_time_slice_order(args: Dict) -> dict:
             # Handle different response structures
             data = getattr(result, "data", None)
             guid = None
-            
+
             if data:
                 # Try direct attribute access first
                 guid = getattr(data, "guid", None)
-                
+
                 # If not found, check if it's a dict with SmartOrderResponse
                 if guid is None and isinstance(data, dict):
                     smart_order_response = data.get("SmartOrderResponse")
                     if smart_order_response:
                         guid = getattr(smart_order_response, "guid", None)
-                
+
                 # If still not found, try accessing as dict key
                 if guid is None and isinstance(data, dict):
                     guid = data.get("guid")
-            
+
             resp = {
                 "guid": guid,
                 "condition_no": guid,

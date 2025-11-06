@@ -14,16 +14,11 @@ from fubon_api_mcp_server.account_service import get_account_info
 # Initialize SDK
 print("正在初始化 SDK...")
 config.sdk = FubonSDK()
-config.accounts = config.sdk.login(
-    config.username, 
-    config.password, 
-    config.pfx_path, 
-    config.pfx_password or ""
-)
+config.accounts = config.sdk.login(config.username, config.password, config.pfx_path, config.pfx_password or "")
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("測試 get_account_info 函數")
-print("="*60)
+print("=" * 60)
 
 # Call get_account_info with empty args
 print("\n1. 調用 get_account_info.fn({})")
@@ -34,28 +29,28 @@ print(f"   - status: {result.get('status')}")
 print(f"   - message: {result.get('message')}")
 print(f"   - data: {result.get('data')}")
 
-if result.get('data'):
+if result.get("data"):
     print(f"\n3. 數據詳情:")
-    if isinstance(result['data'], list):
+    if isinstance(result["data"], list):
         print(f"   - 類型: list")
         print(f"   - 長度: {len(result['data'])}")
-        for i, acc in enumerate(result['data']):
+        for i, acc in enumerate(result["data"]):
             print(f"   - 帳戶 {i+1}: {acc}")
     else:
         print(f"   - 類型: {type(result['data'])}")
         print(f"   - 內容: {result['data']}")
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("檢查 _get_all_accounts_basic_info 內部邏輯")
-print("="*60)
+print("=" * 60)
 
 print(f"\n1. config.accounts 存在: {config.accounts is not None}")
 print(f"2. hasattr 'is_success': {hasattr(config.accounts, 'is_success')}")
-if hasattr(config.accounts, 'is_success'):
+if hasattr(config.accounts, "is_success"):
     print(f"   - is_success: {config.accounts.is_success}")
 
 print(f"3. hasattr 'data': {hasattr(config.accounts, 'data')}")
-if hasattr(config.accounts, 'data'):
+if hasattr(config.accounts, "data"):
     print(f"   - data 類型: {type(config.accounts.data)}")
     print(f"   - data 內容: {config.accounts.data}")
     if config.accounts.data:
