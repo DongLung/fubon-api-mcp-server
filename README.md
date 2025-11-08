@@ -1029,7 +1029,7 @@ flake8 .
 如果這個專案對您有幫助，歡迎請我喝杯咖啡支持開發！
 
 <div align="center">
-  <img src="assets/images/support-qrcode.png" alt="Buy me a coffee" width="200"/>
+  <img src="https://github.com/Mofesto/fubon-api-mcp-server/blob/main/assets/images/support-qrcode.png?raw=true" alt="Buy me a coffee" width="200"/>
   <p><i>掃描 QR Code 支持專案</i></p>
 </div>
 

@@ -670,7 +670,7 @@ class GetHistoricalStatsArgs(BaseModel):
 
 
 class GetIntradayProductsArgs(BaseModel):
-    type: str  # 類型，可選 FUTURE 期貨；OPTION 選擇權
+    type: Optional[str] = None  # 類型，可選 FUTURE 期貨；OPTION 選擇權
     exchange: Optional[str] = None  # 交易所，可選 TAIFEX 臺灣期貨交易所
     session: Optional[str] = (
         None  # 交易時段，可選 REGULAR 一般交易 或 AFTERHOURS 盤後交易
@@ -3104,20 +3104,27 @@ def get_intraday_futopt_products(args: Dict) -> dict:
             api_params["exchange"] = validated_args.exchange
         if validated_args.session is not None:
             api_params["session"] = validated_args.session
-        if validated_args.contract_type is not None:
-            api_params["contract_type"] = validated_args.contract_type
+        if validated_args.contractType is not None:
+            api_params["contractType"] = validated_args.contractType
         if validated_args.status is not None:
             api_params["status"] = validated_args.status
 
         # 調用富邦期貨/選擇權 API
-        global restfutopt  # noqa: F824 - 訪問全局變數
         result = restfutopt.intraday.products(**api_params)
 
         # 檢查 API 返回結果
-        if result and isinstance(result, list):
+        if result and isinstance(result, dict):
+            # 從回應中提取數據
+            products_data = result.get("data", [])
+            query_type = result.get("type")
+            query_exchange = result.get("exchange")
+            query_session = result.get("session")
+            query_contract_type = result.get("contractType")
+            query_status = result.get("status")
+
             # 整理返回數據
             products = []
-            for product in result:
+            for product in products_data:
                 if isinstance(product, dict):
                     product_info = {
                         "symbol": product.get("symbol"),
@@ -3125,17 +3132,25 @@ def get_intraday_futopt_products(args: Dict) -> dict:
                         "type": product.get("type"),
                         "exchange": product.get("exchange"),
                         "session": product.get("session"),
-                        "contract_type": product.get("contract_type"),
-                        "status": product.get("status"),
-                        "underlying_symbol": product.get("underlying_symbol"),
-                        "strike_price": product.get("strike_price"),
-                        "expiration_date": product.get("expiration_date"),
-                        "multiplier": product.get("multiplier"),
-                        "tick_size": product.get("tick_size"),
-                        "tick_value": product.get("tick_value"),
-                        "trading_hours": product.get("trading_hours"),
-                        "settlement_date": product.get("settlement_date"),
-                        "last_trading_date": product.get("last_trading_date"),
+                        "contract_type": product.get("contractType"),
+                        "status": product.get("statusCode"),
+                        "underlying_symbol": product.get("underlyingSymbol"),
+                        "strike_price": product.get("strikePrice"),
+                        "expiration_date": product.get("expirationDate"),
+                        "multiplier": product.get("contractSize"),
+                        "tick_size": product.get("tickSize"),
+                        "tick_value": product.get("tickValue"),
+                        "trading_hours": product.get("tradingHours"),
+                        "settlement_date": product.get("settlementDate"),
+                        "last_trading_date": product.get("lastTradingDate"),
+                        "trading_currency": product.get("tradingCurrency"),
+                        "quote_acceptable": product.get("quoteAcceptable"),
+                        "can_block_trade": product.get("canBlockTrade"),
+                        "expiry_type": product.get("expiryType"),
+                        "underlying_type": product.get("underlyingType"),
+                        "market_close_group": product.get("marketCloseGroup"),
+                        "end_session": product.get("endSession"),
+                        "start_date": product.get("startDate"),
                     }
                     # 移除 None 值
                     product_info = {
@@ -3152,6 +3167,11 @@ def get_intraday_futopt_products(args: Dict) -> dict:
 
             return {
                 "status": "success",
+                "type": query_type,
+                "exchange": query_exchange,
+                "session": query_session,
+                "contractType": query_contract_type,
+                "query_status": query_status,
                 "data": products,
                 "total_count": total_count,
                 "type_counts": type_counts,
@@ -3225,6 +3245,14 @@ def get_intraday_futopt_tickers(args: Dict) -> dict:
         {"type": "FUTURE", "contractType": "I"}
     """
     try:
+        # 檢查 restfutopt 是否已初始化
+        if restfutopt is None:
+            return {
+                "status": "error",
+                "data": None,
+                "message": "期貨/選擇權行情服務未初始化，請先登入系統",
+            }
+
         validated_args = GetIntradayFutOptTickersArgs(**args)
 
         # 準備 API 參數
@@ -3243,14 +3271,18 @@ def get_intraday_futopt_tickers(args: Dict) -> dict:
             api_params["contractType"] = validated_args.contractType
 
         # 調用富邦期貨/選擇權 API
-        global restfutopt  # noqa: F824 - 訪問全局變數
         result = restfutopt.intraday.tickers(**api_params)
 
         # 檢查 API 返回結果
-        if result and isinstance(result, list):
+        if result and isinstance(result, dict) and "data" in result:
+            # API 返回格式為 {'type': '...', 'exchange': '...', 'data': [...]}
+            tickers_data = result.get("data", [])
+            if not isinstance(tickers_data, list):
+                tickers_data = []
+
             # 整理返回數據
             tickers = []
-            for ticker in result:
+            for ticker in tickers_data:
                 if isinstance(ticker, dict):
                     ticker_info = {
                         "symbol": ticker.get("symbol"),
@@ -3334,17 +3366,17 @@ def get_intraday_futopt_ticker(args: Dict) -> dict:
         }
     """
     try:
-        validated_args = GetIntradayFutOptTickerArgs(**args)
-        symbol = validated_args.symbol
-        session = validated_args.session
-
-        global restfutopt
-        if not restfutopt:
+        # 檢查 restfutopt 是否已初始化
+        if restfutopt is None:
             return {
                 "status": "error",
                 "data": None,
-                "message": "期貨/選擇權行情服務未初始化",
+                "message": "期貨/選擇權行情服務未初始化，請先登入系統",
             }
+
+        validated_args = GetIntradayFutOptTickerArgs(**args)
+        symbol = validated_args.symbol
+        session = validated_args.session
 
         # 調用 API
         api_params = {"symbol": symbol}
@@ -3439,17 +3471,17 @@ def get_intraday_futopt_quote(args: Dict) -> dict:
         }
     """
     try:
-        validated_args = GetIntradayFutOptQuoteArgs(**args)
-        symbol = validated_args.symbol
-        session = validated_args.session
-
-        global restfutopt
-        if not restfutopt:
+        # 檢查 restfutopt 是否已初始化
+        if restfutopt is None:
             return {
                 "status": "error",
                 "data": None,
-                "message": "期貨/選擇權行情服務未初始化",
+                "message": "期貨/選擇權行情服務未初始化，請先登入系統",
             }
+
+        validated_args = GetIntradayFutOptQuoteArgs(**args)
+        symbol = validated_args.symbol
+        session = validated_args.session
 
         # 調用 API
         api_params = {"symbol": symbol}
@@ -3531,18 +3563,18 @@ def get_intraday_futopt_candles(args: Dict) -> dict:
         }
     """
     try:
+        # 檢查 restfutopt 是否已初始化
+        if restfutopt is None:
+            return {
+                "status": "error",
+                "data": None,
+                "message": "期貨/選擇權行情服務未初始化，請先登入系統",
+            }
+
         validated_args = GetIntradayFutOptCandlesArgs(**args)
         symbol = validated_args.symbol
         session = validated_args.session
         timeframe = validated_args.timeframe
-
-        global restfutopt
-        if not restfutopt:
-            return {
-                "status": "error",
-                "data": None,
-                "message": "期貨/選擇權行情服務未初始化",
-            }
 
         # 調用 API
         api_params = {"symbol": symbol}
@@ -3582,9 +3614,6 @@ def get_intraday_futopt_candles(args: Dict) -> dict:
         }
 
 
-
-
-
 @mcp.tool()
 def get_intraday_futopt_volumes(args: Dict) -> dict:
     """
@@ -3614,6 +3643,14 @@ def get_intraday_futopt_volumes(args: Dict) -> dict:
         }
     """
     try:
+        # 檢查 restfutopt 是否已初始化
+        if restfutopt is None:
+            return {
+                "status": "error",
+                "data": None,
+                "message": "期貨/選擇權行情服務未初始化，請先登入系統",
+            }
+
         validated_args = GetIntradayFutOptVolumesArgs(**args)
         symbol = validated_args.symbol
         session = validated_args.session
@@ -3689,6 +3726,14 @@ def get_intraday_futopt_trades(args: Dict) -> dict:
         }
     """
     try:
+        # 檢查 restfutopt 是否已初始化
+        if restfutopt is None:
+            return {
+                "status": "error",
+                "data": None,
+                "message": "期貨/選擇權行情服務未初始化，請先登入系統",
+            }
+
         validated_args = GetIntradayFutOptTradesArgs(**args)
         symbol = validated_args.symbol
         session = validated_args.session

@@ -45,6 +45,28 @@ def mock_server_globals(mock_accounts, mock_sdk):
 
 
 @pytest.fixture
+def mock_restfutopt():
+    """Mock restfutopt object for futures/options testing."""
+    mock_restfutopt = Mock()
+    mock_restfutopt.intraday = Mock()
+    return mock_restfutopt
+
+
+@pytest.fixture
+def mock_server_globals_futopt(mock_accounts, mock_sdk, mock_restfutopt):
+    """Mock global variables in server.py for futures/options testing."""
+    from unittest.mock import patch
+
+    with (
+        patch("fubon_api_mcp_server.server.accounts", mock_accounts),
+        patch("fubon_api_mcp_server.server.sdk", mock_sdk),
+        patch("fubon_api_mcp_server.server.reststock", mock_sdk.marketdata.rest_client.stock),
+        patch("fubon_api_mcp_server.server.restfutopt", mock_restfutopt),
+    ):
+        yield
+
+
+@pytest.fixture
 def sample_order_data():
     """Sample order data for testing."""
     return {
