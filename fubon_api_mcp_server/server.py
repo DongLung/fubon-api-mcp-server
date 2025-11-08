@@ -927,6 +927,8 @@ class TimeSliceSplitArgs(BaseModel):
             m = getattr(_TS, self.method)
         except Exception:
             raise ValueError("method 無效，必須是 TimeSliceOrderType 的成員名稱 (Type1/Type2/Type3) 或 'TimeSlice' (自動推斷)")
+
+
 # =============================================================================
 # 技術指標與訊號 參數模型
 # =============================================================================

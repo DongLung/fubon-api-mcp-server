@@ -68,8 +68,7 @@ class TestBollingerBands:
 
     def test_calculate_bollinger_bands_basic(self):
         """Test basic Bollinger Bands calculation."""
-        data = pd.Series([10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-                         20, 21, 22, 23, 24, 25, 26, 27, 28, 29])
+        data = pd.Series([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29])
         result = calculate_bollinger_bands(data, period=5, stddev=2.0)
 
         # Check that all required keys are present
@@ -107,8 +106,7 @@ class TestRSI:
     def test_calculate_rsi_basic(self):
         """Test basic RSI calculation."""
         # Create a simple uptrend
-        data = pd.Series([10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-                         20, 21, 22, 23, 24, 25, 26, 27, 28, 29])
+        data = pd.Series([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29])
         result = calculate_rsi(data, period=14)
 
         # RSI should be between 0 and 100
@@ -121,8 +119,7 @@ class TestRSI:
     def test_calculate_rsi_downtrend(self):
         """Test RSI with downtrend."""
         # Create a downtrend
-        data = pd.Series([30, 29, 28, 27, 26, 25, 24, 23, 22, 21,
-                         20, 19, 18, 17, 16, 15, 14, 13, 12, 11])
+        data = pd.Series([30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11])
         result = calculate_rsi(data, period=14)
 
         # RSI should be between 0 and 100
@@ -146,9 +143,40 @@ class TestMACD:
 
     def test_calculate_macd_basic(self):
         """Test basic MACD calculation."""
-        data = pd.Series([10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-                         20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
-                         30, 31, 32, 33, 34, 35, 36, 37, 38, 39])
+        data = pd.Series(
+            [
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                21,
+                22,
+                23,
+                24,
+                25,
+                26,
+                27,
+                28,
+                29,
+                30,
+                31,
+                32,
+                33,
+                34,
+                35,
+                36,
+                37,
+                38,
+                39,
+            ]
+        )
         result = calculate_macd(data, fast=12, slow=26, signal=9)
 
         # Check that all required keys are present
@@ -186,12 +214,9 @@ class TestKD:
 
     def test_calculate_kd_basic(self):
         """Test basic KD calculation."""
-        high = pd.Series([15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-                         25, 26, 27, 28, 29, 30, 31, 32, 33, 34])
-        low = pd.Series([5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
-                        15, 16, 17, 18, 19, 20, 21, 22, 23, 24])
-        close = pd.Series([10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-                          20, 21, 22, 23, 24, 25, 26, 27, 28, 29])
+        high = pd.Series([15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34])
+        low = pd.Series([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24])
+        close = pd.Series([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29])
 
         result = calculate_kd(high, low, close, period=5, smooth_k=3, smooth_d=3)
 
@@ -223,8 +248,9 @@ class TestVolumeRate:
 
     def test_calculate_volume_rate_basic(self):
         """Test basic volume rate calculation."""
-        volume = pd.Series([100, 200, 150, 300, 250, 400, 350, 500, 450, 600,
-                           550, 700, 650, 800, 750, 900, 850, 1000, 950, 1100])
+        volume = pd.Series(
+            [100, 200, 150, 300, 250, 400, 350, 500, 450, 600, 550, 700, 650, 800, 750, 900, 850, 1000, 950, 1100]
+        )
         result = calculate_volume_rate(volume, period=5)
 
         # Volume rate = current volume / average volume over period
@@ -254,7 +280,7 @@ class TestIndicatorsIntegration:
     def test_all_indicators_with_realistic_data(self):
         """Test all indicators with realistic stock data."""
         # Create realistic stock data
-        dates = pd.date_range('2023-01-01', periods=50, freq='D')
+        dates = pd.date_range("2023-01-01", periods=50, freq="D")
         np.random.seed(42)  # For reproducible results
 
         # Generate realistic price data with trend
