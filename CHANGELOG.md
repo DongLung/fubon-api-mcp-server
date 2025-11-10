@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2025-11-10
+
+### Added
+- 🚀 **Phase 3 Advanced Analysis**: 新增投資組合優化、市場情緒指數生成、套利機會偵測等進階功能
+- 📊 **新 MCP 工具**: 添加多項量化交易和風險管理工具
+- 🧪 **測試增強**: 新增串流測試和服務測試覆蓋率
+- 📚 **文檔更新**: 更新 README 和 Extension 文檔
+
+### Fixed
+- 🐛 **Bug 修復**: 修正多個服務和工具的問題
+
 ## [2.0.6] - 2025-11-05
 
 ### Fixed
