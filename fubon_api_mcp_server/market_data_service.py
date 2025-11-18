@@ -14,13 +14,12 @@
 - API 調用封裝
 """
 
-import pandas as pd
-import numpy as np
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import logging
 
- 
+import numpy as np
+import pandas as pd
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
@@ -62,12 +61,13 @@ class MarketDataService:
         """創建數據庫表"""
         try:
             import sqlite3
-            
+
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                
+
                 # 創建股票歷史數據表
-                cursor.execute('''
+                cursor.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS stock_historical_data (
                         symbol TEXT NOT NULL,
                         date TEXT NOT NULL,
@@ -81,17 +81,20 @@ class MarketDataService:
                         change_ratio REAL,
                         PRIMARY KEY (symbol, date)
                     )
-                ''')
-                
+                """
+                )
+
                 # 創建索引以提高查詢性能
-                cursor.execute('''
+                cursor.execute(
+                    """
                     CREATE INDEX IF NOT EXISTS idx_symbol_date 
                     ON stock_historical_data(symbol, date)
-                ''')
-                
+                """
+                )
+
                 conn.commit()
                 self.logger.info("數據庫表創建成功: %s", self.db_path)
-                
+
         except Exception:
             self.logger.exception("創建數據庫表時發生錯誤")
             raise
@@ -108,9 +111,9 @@ class MarketDataService:
 
             def to_snake_case(s: str) -> str:
                 # Convert camelCase or PascalCase to snake_case
-                s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', s)
-                s2 = re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1)
-                return s2.replace('-', '_').lower()
+                s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", s)
+                s2 = re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1)
+                return s2.replace("-", "_").lower()
 
             def normalize_value(v):
                 # Primitive types
@@ -126,23 +129,23 @@ class MarketDataService:
                 if dataclasses.is_dataclass(v):
                     return normalize_dict(dataclasses.asdict(v))
                 # Namedtuple or object with _asdict
-                if hasattr(v, '_asdict') and callable(v._asdict):
+                if hasattr(v, "_asdict") and callable(v._asdict):
                     return normalize_dict(v._asdict())
                 # Object with dict() or to_dict()
-                if hasattr(v, 'dict') and callable(getattr(v, 'dict')):
+                if hasattr(v, "dict") and callable(getattr(v, "dict")):
                     try:
                         return normalize_value(v.dict())
                     except Exception:
                         pass
-                if hasattr(v, 'to_dict') and callable(getattr(v, 'to_dict')):
+                if hasattr(v, "to_dict") and callable(getattr(v, "to_dict")):
                     try:
                         return normalize_value(v.to_dict())
                     except Exception:
                         pass
                 # Object with __dict__
-                if hasattr(v, '__dict__'):
+                if hasattr(v, "__dict__"):
                     try:
-                        return normalize_dict({k: getattr(v, k) for k in v.__dict__ if not k.startswith('_')})
+                        return normalize_dict({k: getattr(v, k) for k in v.__dict__ if not k.startswith("_")})
                     except Exception:
                         pass
                 # Fallback: try to parse simple dict-like string
@@ -156,7 +159,7 @@ class MarketDataService:
                             elif none_val:
                                 result[key] = None
                             elif num_val:
-                                result[key] = float(num_val) if '.' in num_val else int(num_val)
+                                result[key] = float(num_val) if "." in num_val else int(num_val)
                         return result
                 # final fallback: string repr
                 try:
@@ -182,33 +185,33 @@ class MarketDataService:
             # list-like
             if isinstance(obj, (list, tuple, set)):
                 return [self._normalize_result(x) for x in obj]
-            import unittest
             import types as _types
+            import unittest
             import unittest.mock as _unittest_mock
 
             # Dataclass, namedtuple, or object with _asdict
             if dataclasses.is_dataclass(obj):
                 return normalize_dict(dataclasses.asdict(obj))
-            if hasattr(obj, '_asdict') and callable(getattr(obj, '_asdict')):
+            if hasattr(obj, "_asdict") and callable(getattr(obj, "_asdict")):
                 return normalize_dict(obj._asdict())
             # SDK-provided dict or to_dict or dict methods
-            if hasattr(obj, 'dict') and callable(getattr(obj, 'dict')) and not isinstance(obj, _unittest_mock.Mock):
+            if hasattr(obj, "dict") and callable(getattr(obj, "dict")) and not isinstance(obj, _unittest_mock.Mock):
                 try:
                     return normalize_value(obj.dict())
                 except Exception:
                     pass
-            if hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')) and not isinstance(obj, _unittest_mock.Mock):
+            if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")) and not isinstance(obj, _unittest_mock.Mock):
                 try:
                     return normalize_value(obj.to_dict())
                 except Exception:
                     pass
             # If object has 'data' attribute, unpack and normalize
-            if hasattr(obj, 'data') and not isinstance(obj, _unittest_mock.Mock):
-                return normalize_value(getattr(obj, 'data'))
+            if hasattr(obj, "data") and not isinstance(obj, _unittest_mock.Mock):
+                return normalize_value(getattr(obj, "data"))
             # If object has __dict__ (usual case for objects with attributes)
-            if hasattr(obj, '__dict__') and not isinstance(obj, _unittest_mock.Mock):
+            if hasattr(obj, "__dict__") and not isinstance(obj, _unittest_mock.Mock):
                 try:
-                    return normalize_dict({k: getattr(obj, k) for k in obj.__dict__ if not k.startswith('_')})
+                    return normalize_dict({k: getattr(obj, k) for k in obj.__dict__ if not k.startswith("_")})
                 except Exception:
                     pass
             # As a last effort, inspect public non-callable attributes (works for Mock and other objects)
@@ -217,7 +220,7 @@ class MarketDataService:
 
                 attrs = {}
                 for attr in dir(obj):
-                    if attr.startswith('_'):
+                    if attr.startswith("_"):
                         continue
                     try:
                         val = getattr(obj, attr)
@@ -241,7 +244,7 @@ class MarketDataService:
                     elif none_val:
                         result[key] = None
                     elif num_val:
-                        if '.' in num_val:
+                        if "." in num_val:
                             result[key] = float(num_val)
                         else:
                             try:
@@ -281,7 +284,7 @@ class MarketDataService:
         self.mcp.tool()(self.margin_quota)
         self.mcp.tool()(self.daytrade_and_stock_info)
         self.mcp.tool()(self.query_symbol_quote)
-        self.mcp.tool()(self.get_market_overview) #ERROR 無法獲取台股指數行情
+        self.mcp.tool()(self.get_market_overview)  # ERROR 無法獲取台股指數行情
 
         # 期貨/選擇權市場數據工具
         self.mcp.tool()(self.get_intraday_futopt_products)
@@ -343,9 +346,7 @@ class MarketDataService:
                 "message": f"獲取數據時發生錯誤: {str(e)}",
             }
 
-    def _get_local_historical_data(
-        self, symbol: str, from_date: str, to_date: str
-    ) -> dict:
+    def _get_local_historical_data(self, symbol: str, from_date: str, to_date: str) -> dict:
         """從本地數據獲取歷史數據"""
         local_data = self._read_local_stock_data(symbol)
         if local_data is None:
@@ -370,9 +371,7 @@ class MarketDataService:
             "message": f"成功從本地數據獲取 {symbol} 從 {from_date} 到 {to_date} 的數據",
         }
 
-    def _fetch_api_historical_data(
-        self, symbol: str, from_date: str, to_date: str
-    ) -> list:
+    def _fetch_api_historical_data(self, symbol: str, from_date: str, to_date: str) -> list:
         """從 API 獲取歷史數據"""
         from_datetime = pd.to_datetime(from_date)
         to_datetime = pd.to_datetime(to_date)
@@ -398,9 +397,7 @@ class MarketDataService:
 
         return all_data
 
-    def _fetch_historical_data_segment(
-        self, symbol: str, from_date: str, to_date: str
-    ) -> list:
+    def _fetch_historical_data_segment(self, symbol: str, from_date: str, to_date: str) -> list:
         """
         獲取一段歷史數據。
 
@@ -483,7 +480,7 @@ class MarketDataService:
         """
         try:
             import sqlite3
-            
+
             with sqlite3.connect(self.db_path) as conn:
                 query = """
                     SELECT symbol, date, open, high, low, close, volume, 
@@ -493,7 +490,7 @@ class MarketDataService:
                     ORDER BY date DESC
                 """
                 df = pd.read_sql_query(query, conn, params=[stock_code])
-                
+
                 if df.empty:
                     return None
 
@@ -516,38 +513,41 @@ class MarketDataService:
         """
         try:
             import sqlite3
-            
+
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                
+
                 # 準備插入數據
                 for record in new_data:
                     # 確保日期格式正確
                     date_str = str(record.get("date", ""))
                     if isinstance(record.get("date"), pd.Timestamp):
                         date_str = record["date"].strftime("%Y-%m-%d")
-                    
+
                     # 使用INSERT OR REPLACE來處理重複數據
-                    cursor.execute('''
+                    cursor.execute(
+                        """
                         INSERT OR REPLACE INTO stock_historical_data 
                         (symbol, date, open, high, low, close, volume, vol_value, price_change, change_ratio)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        symbol,
-                        date_str,
-                        record.get("open"),
-                        record.get("high"),
-                        record.get("low"),
-                        record.get("close"),
-                        record.get("volume"),
-                        record.get("vol_value"),
-                        record.get("price_change"),
-                        record.get("change_ratio")
-                    ))
-                
+                    """,
+                        (
+                            symbol,
+                            date_str,
+                            record.get("open"),
+                            record.get("high"),
+                            record.get("low"),
+                            record.get("close"),
+                            record.get("volume"),
+                            record.get("vol_value"),
+                            record.get("price_change"),
+                            record.get("change_ratio"),
+                        ),
+                    )
+
                 conn.commit()
                 self.logger.info("成功保存數據到SQLite: %s, %d 筆記錄", symbol, len(new_data))
-                
+
         except Exception:
             self.logger.exception("保存SQLite數據時發生錯誤")
 
@@ -715,9 +715,7 @@ class MarketDataService:
             # 如果數據是字典且包含 securityType，進行轉換
             if isinstance(data, dict) and "securityType" in data:
                 security_type_code = str(data["securityType"])
-                data["securityTypeName"] = security_type_mapping.get(
-                    security_type_code, f"未知代碼({security_type_code})"
-                )
+                data["securityTypeName"] = security_type_mapping.get(security_type_code, f"未知代碼({security_type_code})")
 
             return {
                 "status": "success",
@@ -1300,9 +1298,7 @@ class MarketDataService:
                             "start_date": product.get("startDate"),
                         }
                         # 移除 None 值
-                        product_info = {
-                            k: v for k, v in product_info.items() if v is not None
-                        }
+                        product_info = {k: v for k, v in product_info.items() if v is not None}
                         products.append(product_info)
 
                 # 統計資訊
@@ -1447,9 +1443,7 @@ class MarketDataService:
                             "last_trading_date": ticker.get("lastTradingDate"),
                         }
                         # 移除 None 值
-                        ticker_info = {
-                            k: v for k, v in ticker_info.items() if v is not None
-                        }
+                        ticker_info = {k: v for k, v in ticker_info.items() if v is not None}
                         tickers.append(ticker_info)
 
                 # 統計資訊
@@ -1937,9 +1931,7 @@ class MarketDataService:
             close = df["close"]
             high = df["high"] if "high" in df.columns else close
             low = df["low"] if "low" in df.columns else close
-            volume = (
-                df["volume"] if "volume" in df.columns else pd.Series([0] * len(df))
-            )
+            volume = df["volume"] if "volume" in df.columns else pd.Series([0] * len(df))
 
             bb = indicators.calculate_bollinger_bands(close)
             rsi = indicators.calculate_rsi(close)
@@ -1962,9 +1954,7 @@ class MarketDataService:
                 "k": float(kd["k"].iloc[-1]),
                 "d": float(kd["d"].iloc[-1]),
                 "volume": int(volume.iloc[-1]),
-                "volume_rate": float(vol_rate.iloc[-1])
-                if not pd.isna(vol_rate.iloc[-1])
-                else 0.0,
+                "volume_rate": float(vol_rate.iloc[-1]) if not pd.isna(vol_rate.iloc[-1]) else 0.0,
             }
             prev_row = None
             if len(df) >= 2:
@@ -2045,9 +2035,7 @@ class MarketDataService:
             stock_type_enums = to_stock_types(stock_type)
 
             # 調用SDK
-            result = self.sdk.stock.query_symbol_snapshot(
-                account_obj, market_type_enum, stock_type_enums
-            )
+            result = self.sdk.stock.query_symbol_snapshot(account_obj, market_type_enum, stock_type_enums)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 data = self._normalize_result(result.data if hasattr(result, "data") else result)
@@ -2069,7 +2057,7 @@ class MarketDataService:
                 "message": f"查詢快照報價失敗: {str(e)}",
             }
 
-    def query_symbol_quote(self,args: Dict) -> dict:
+    def query_symbol_quote(self, args: Dict) -> dict:
         """
         查詢商品漲跌幅報表（單筆）
 
@@ -2165,18 +2153,10 @@ class MarketDataService:
             # 轉換市場類型枚舉
             market_type_enum = to_market_type(market_type)
             # 查詢商品報價
-            quote_result = self.sdk.stock.query_symbol_quote(
-                account_obj, symbol, market_type_enum
-            )
-            
-            if (
-                quote_result
-                and hasattr(quote_result, "is_success")
-                and quote_result.is_success
-            ):
-                data = self._normalize_result(
-                    quote_result.data if hasattr(quote_result, "data") else quote_result
-                )
+            quote_result = self.sdk.stock.query_symbol_quote(account_obj, symbol, market_type_enum)
+
+            if quote_result and hasattr(quote_result, "is_success") and quote_result.is_success:
+                data = self._normalize_result(quote_result.data if hasattr(quote_result, "data") else quote_result)
                 return {
                     "status": "success",
                     "data": data,
@@ -2196,7 +2176,7 @@ class MarketDataService:
                 "message": f"獲取商品報價失敗: {str(e)}",
             }
 
-    def margin_quota(self,args: Dict) -> dict:
+    def margin_quota(self, args: Dict) -> dict:
         """
         查詢資券配額
 
@@ -2276,11 +2256,7 @@ class MarketDataService:
             margin_quota_result = self.sdk.stock.margin_quota(account_obj, stock_no)
 
             # 檢查 API 返回結果 - 類似於股票API的處理方式
-            if (
-                margin_quota_result
-                and hasattr(margin_quota_result, "is_success")
-                and margin_quota_result.is_success
-            ):
+            if margin_quota_result and hasattr(margin_quota_result, "is_success") and margin_quota_result.is_success:
                 data = self._normalize_result(
                     margin_quota_result.data if hasattr(margin_quota_result, "data") else margin_quota_result
                 )
@@ -2321,7 +2297,7 @@ class MarketDataService:
                 "message": f"獲取資券配額失敗: {str(e)}",
             }
 
-    def daytrade_and_stock_info(self,args: Dict) -> dict:
+    def daytrade_and_stock_info(self, args: Dict) -> dict:
         """
         查詢現沖券配額資訊
 
@@ -2400,14 +2376,8 @@ class MarketDataService:
             # 查詢現沖券配額資訊
             daytrade_info = self.sdk.stock.daytrade_and_stock_info(account_obj, stock_no)
 
-            if (
-                daytrade_info
-                and hasattr(daytrade_info, "is_success")
-                and daytrade_info.is_success
-            ):
-                data = self._normalize_result(
-                    daytrade_info.data if hasattr(daytrade_info, "data") else daytrade_info
-                )
+            if daytrade_info and hasattr(daytrade_info, "is_success") and daytrade_info.is_success:
+                data = self._normalize_result(daytrade_info.data if hasattr(daytrade_info, "data") else daytrade_info)
                 return {
                     "status": "success",
                     "data": data,
@@ -2466,11 +2436,7 @@ class MarketDataService:
                 movers_result = self.reststock.snapshot.movers(
                     market="TSE", direction="up", change="value", gt=0, type="COMMONSTOCK"
                 )
-                up_count = (
-                    len(movers_result.data)
-                    if movers_result and hasattr(movers_result, "data")
-                    else 0
-                )
+                up_count = len(movers_result.data) if movers_result and hasattr(movers_result, "data") else 0
             except Exception:
                 up_count = 0
 
@@ -2478,19 +2444,14 @@ class MarketDataService:
                 movers_result = self.reststock.snapshot.movers(
                     market="TSE", direction="down", change="value", lt=0, type="COMMONSTOCK"
                 )
-                down_count = (
-                    len(movers_result.data)
-                    if movers_result and hasattr(movers_result, "data")
-                    else 0
-                )
+                down_count = len(movers_result.data) if movers_result and hasattr(movers_result, "data") else 0
             except Exception:
                 down_count = 0
 
             # 獲取成交量統計
             try:
-                actives_result = self.reststock.snapshot.actives(
-                    market="TSE", trade="volume", type="COMMONSTOCK"
-                )
+                actives_result = self.reststock.snapshot.actives(market="TSE", trade="volume", type="COMMONSTOCK")
+
                 # 嘗試從返回的 data 取得 trade volume，字段名稱可能為 trade_volume 或 tradeVolume
                 def _get_trade_volume(item):
                     if isinstance(item, dict):
@@ -2499,7 +2460,10 @@ class MarketDataService:
                         return getattr(item, "trade_volume", None) or getattr(item, "tradeVolume", None) or 0
 
                 total_volume = (
-                    sum(_get_trade_volume(item) for item in (actives_result.data[:10] if hasattr(actives_result, "data") else []))
+                    sum(
+                        _get_trade_volume(item)
+                        for item in (actives_result.data[:10] if hasattr(actives_result, "data") else [])
+                    )
                     if actives_result and hasattr(actives_result, "data")
                     else 0
                 )
@@ -2509,7 +2473,9 @@ class MarketDataService:
             index_data = self._normalize_result(tse_result.data if hasattr(tse_result, "data") else tse_result)
             price = index_data.get("price") or index_data.get("close") or 0
             change = index_data.get("change") or index_data.get("chg") or 0
-            change_percent = index_data.get("change_percent") or index_data.get("chg_percent") or index_data.get("changePercent") or 0
+            change_percent = (
+                index_data.get("change_percent") or index_data.get("chg_percent") or index_data.get("changePercent") or 0
+            )
             volume_val = 0
             # 有時 total 會是一個 dict
             if isinstance(index_data.get("total"), dict):
@@ -2548,9 +2514,7 @@ class MarketDataService:
                 "message": f"獲取市場概況時發生錯誤: {str(e)}",
             }
 
-    def _bb_position(
-        self, close: float, upper: float, middle: float, lower: float
-    ) -> str:
+    def _bb_position(self, close: float, upper: float, middle: float, lower: float) -> str:
         if close > upper:
             return "突破上軌"
         if close > middle:
@@ -2573,15 +2537,9 @@ class MarketDataService:
     def _macd_cross(self, latest: Dict, prev: Dict | None) -> str:
         if not prev:
             return "無"
-        if (
-            latest["macd"] > latest["macd_signal"]
-            and prev["macd"] <= prev["macd_signal"]
-        ):
+        if latest["macd"] > latest["macd_signal"] and prev["macd"] <= prev["macd_signal"]:
             return "金叉"
-        if (
-            latest["macd"] < latest["macd_signal"]
-            and prev["macd"] >= prev["macd_signal"]
-        ):
+        if latest["macd"] < latest["macd_signal"] and prev["macd"] >= prev["macd_signal"]:
             return "死叉"
         return "無"
 
@@ -2610,9 +2568,7 @@ class MarketDataService:
         reasons: List[str] = []
 
         # Bollinger (±30)
-        bb_pos = self._bb_position(
-            latest["close"], latest["bb_upper"], latest["bb_middle"], latest["bb_lower"]
-        )
+        bb_pos = self._bb_position(latest["close"], latest["bb_upper"], latest["bb_middle"], latest["bb_lower"])
         bb_score = 0
         if bb_pos == "突破上軌":
             bb_score = 25

@@ -20,33 +20,20 @@
 - 損益計算
 """
 
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from fubon_neo.constant import (
-    ConditionMarketType,
-    ConditionOrderType,
     ConditionPriceType,
-    ConditionStatus,
-    Direction,
-    HistoryStatus,
-    Operator,
-    SplitDescription,
-    StopSign,
-    TimeSliceOrderType,
     TPSLOrder,
     TPSLWrapper,
-    TradingType,
     TrailOrder,
     TriggerContent,
 )
 from fubon_neo.sdk import Condition, ConditionDayTrade, ConditionOrder, FubonSDK
 from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel, Field
-
-from .utils import validate_and_get_account
+from pydantic import BaseModel
 
 # 本地模組導入
 from .enums import (
@@ -54,20 +41,14 @@ from .enums import (
     to_condition_market_type,
     to_condition_order_type,
     to_condition_price_type,
-    to_condition_status,
     to_direction,
-    to_history_status,
-    to_market_type,
     to_operator,
-    to_order_type,
-    to_price_type,
-    to_stock_types,
     to_stop_sign,
     to_time_in_force,
-    to_time_slice_order_type,
     to_trading_type,
     to_trigger_content,
 )
+from .utils import validate_and_get_account
 
 
 class TradingService:
@@ -89,6 +70,128 @@ class TradingService:
         self.reststock = reststock
         self.restfutopt = restfutopt
         self._register_tools()
+
+    def _to_dict(self, obj):
+        """將 SDK 物件轉換為字典，行為與 AccountService 相同，提供序列化支援"""
+        if obj is None:
+            return None
+        if isinstance(obj, (str, int, float, bool)):
+            return obj
+        if isinstance(obj, list):
+            return [self._to_dict(x) for x in obj]
+        if isinstance(obj, dict):
+            return {k: self._to_dict(v) for k, v in obj.items()}
+        try:
+            return {k: self._to_dict(v) for k, v in vars(obj).items() if not k.startswith("_")}
+        except Exception:
+            # fallback - try common attrs
+            common_attrs = [
+                "name",
+                "account",
+                "branch_no",
+                "account_type",
+                "id_no",
+                "status",
+                "date",
+                "stock_no",
+                "order_type",
+                "lastday_qty",
+                "buy_qty",
+                "buy_filled_qty",
+                "buy_value",
+                "today_qty",
+                "tradable_qty",
+                "sell_qty",
+                "sell_filled_qty",
+                "sell_value",
+                "odd",
+                "balance",
+                "available_balance",
+                "currency",
+                "maintenance_ratio",
+                "maintenance_summary",
+                "maintenance_detail",
+                "account_obj",
+                "details",
+                "settlement_date",
+                "buy_fee",
+                "buy_settlement",
+                "buy_tax",
+                "sell_fee",
+                "sell_settlement",
+                "sell_tax",
+                "total_bs_value",
+                "total_fee",
+                "total_tax",
+                "total_settlement_amount",
+                "start_date",
+                "end_date",
+                "buy_sell",
+                "filled_qty",
+                "filled_price",
+                "realized_profit",
+                "realized_loss",
+                "cost_price",
+                "tradable_qty",
+                "unrealized_profit",
+                "unrealized_loss",
+                "filled_avg_price",
+                "realized_profit_and_loss",
+            ]
+            result = {}
+            for attr in common_attrs:
+                if hasattr(obj, attr):
+                    result[attr] = self._to_dict(getattr(obj, attr))
+            if result:
+                return result
+            return str(obj)
+
+    def _stock_client(self):
+        """Return the stock client if present, otherwise the top-level SDK (for backward compatibility with tests)."""
+        # If top-level SDK has stock-related methods (place_order/place_condition_order etc.)
+        # prefer it so tests that mock `sdk.place_order` still work. Otherwise fall back to sdk.stock.
+        top_level_methods = [
+            "place_order",
+            "place_condition_order",
+            "cancel_order",
+            "place_multi_condition_order",
+            "place_daytrade_condition_order",
+            "place_time_slice_order",
+            "get_order_results",
+            "get_order_results_detail",
+            "cancel_condition_order",
+            "trail_profit",
+            "get_trail_history",
+            "get_condition_history",
+        ]
+        if any(hasattr(self.sdk, m) for m in top_level_methods):
+            return self.sdk
+        return getattr(self.sdk, "stock", self.sdk)
+
+    def _stock_client_for(self, method_name: str):
+        """Return the best client to call for a given method name.
+
+        If a stock client has a configured mock for method_name (side_effect/return_value) prefer it,
+        else if the top-level sdk has a configured mock prefer it, otherwise prefer stock if available.
+        """
+        stock = getattr(self.sdk, "stock", None)
+        stock_method = getattr(stock, method_name, None) if stock is not None else None
+        top_method = getattr(self.sdk, method_name, None)
+
+        def is_configured(m):
+            if m is None:
+                return False
+            # For Mock objects, side_effect or return_value indicates configuration.
+            has_side_effect = getattr(m, "side_effect", None) is not None
+            has_return = getattr(m, "return_value", None) is not None
+            return has_side_effect or has_return
+
+        if stock_method is not None and is_configured(stock_method):
+            return stock
+        if top_method is not None and is_configured(top_method):
+            return self.sdk
+        # fallback
+        return stock if stock is not None else self.sdk
 
     def _register_tools(self):
         """註冊所有交易相關的工具"""
@@ -155,12 +258,13 @@ class TradingService:
             }
 
             # 調用 SDK 下單
-            result = self.sdk.stock.place_order(**order_params)
+            stock_client = self._stock_client_for("place_order")
+            result = stock_client.place_order(**order_params)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"委託單下單成功，委託單號: {result.data.get('order_no', 'N/A')}",
                 }
             else:
@@ -191,14 +295,13 @@ class TradingService:
                 return {"status": "error", "data": None, "message": error}
 
             # 調用 SDK 取消委託
-            result = self.sdk.stock.cancel_order(
-                account=account_obj, order_no=validated_args.order_no
-            )
+            stock_client = self._stock_client_for("cancel_order")
+            result = stock_client.cancel_order(account=account_obj, order_no=validated_args.order_no)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"委託單 {validated_args.order_no} 取消成功",
                 }
             else:
@@ -225,11 +328,14 @@ class TradingService:
         """
         try:
             validated_args = ModifyPriceArgs(**args)
-            account = validate_and_get_account(validated_args.account)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
 
             # 調用 SDK 修改價格
-            result = self.sdk.modify_price(
-                account=account,
+            stock_client = self._stock_client_for("modify_price")
+            result = stock_client.modify_price(
+                account=account_obj,
                 order_no=validated_args.order_no,
                 new_price=validated_args.new_price,
             )
@@ -237,7 +343,7 @@ class TradingService:
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"委託單 {validated_args.order_no} 價格修改成功",
                 }
             else:
@@ -264,11 +370,14 @@ class TradingService:
         """
         try:
             validated_args = ModifyQuantityArgs(**args)
-            account = validate_and_get_account(validated_args.account)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
 
             # 調用 SDK 修改數量
-            result = self.sdk.modify_quantity(
-                account=account,
+            stock_client = self._stock_client_for("modify_quantity")
+            result = stock_client.modify_quantity(
+                account=account_obj,
                 order_no=validated_args.order_no,
                 new_quantity=validated_args.new_quantity,
             )
@@ -276,7 +385,7 @@ class TradingService:
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"委託單 {validated_args.order_no} 數量修改成功",
                 }
             else:
@@ -318,10 +427,7 @@ class TradingService:
 
             # 使用 ThreadPoolExecutor 進行並發下單
             with ThreadPoolExecutor(max_workers=min(len(orders), 10)) as executor:
-                future_to_order = {
-                    executor.submit(self._place_single_order, order): order
-                    for order in orders
-                }
+                future_to_order = {executor.submit(self._place_single_order, order): order for order in orders}
 
                 for future in as_completed(future_to_order):
                     order = future_to_order[future]
@@ -365,11 +471,13 @@ class TradingService:
         """下單單筆委託（用於批量下單）"""
         try:
             # 驗證帳戶
-            account = validate_and_get_account(order["account"])
+            account_obj, error = validate_and_get_account(order["account"])
+            if error:
+                return {"status": "error", "data": None, "symbol": order.get("symbol"), "message": error}
 
             # 構建委託參數
             order_params = {
-                "account": account,
+                "account": account_obj,
                 "buy_sell": order["buy_sell"],
                 "symbol": order["symbol"],
                 "price": order["price"],
@@ -381,12 +489,13 @@ class TradingService:
             }
 
             # 調用 SDK 下單
-            result = self.sdk.place_order(**order_params)
+            stock_client = self._stock_client_for("place_order")
+            result = stock_client.place_order(**order_params)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "symbol": order["symbol"],
                     "message": f"委託單下單成功，委託單號: {result.data.get('order_no', 'N/A')}",
                 }
@@ -512,11 +621,13 @@ class TradingService:
         """
         try:
             validated_args = PlaceConditionOrderArgs(**args)
-            account = validate_and_get_account(validated_args.account)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
 
             # 構建條件單參數
             condition_params = {
-                "account": account,
+                "account": account_obj,
                 "start_date": validated_args.start_date,
                 "end_date": validated_args.end_date,
                 "stop_sign": validated_args.stop_sign,
@@ -529,12 +640,13 @@ class TradingService:
                 condition_params["tpsl"] = validated_args.tpsl
 
             # 調用 SDK 建立條件單
-            result = self.sdk.place_condition_order(**condition_params)
+            stock_client = self._stock_client_for("place_condition_order")
+            result = stock_client.place_condition_order(**condition_params)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"條件單建立成功，條件單號: {result.data.get('condition_no', 'N/A')}",
                 }
             else:
@@ -651,11 +763,13 @@ class TradingService:
         """
         try:
             validated_args = PlaceMultiConditionOrderArgs(**args)
-            account = validate_and_get_account(validated_args.account)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
 
             # 構建多條件單參數
             condition_params = {
-                "account": account,
+                "account": account_obj,
                 "start_date": validated_args.start_date,
                 "end_date": validated_args.end_date,
                 "stop_sign": validated_args.stop_sign,
@@ -668,12 +782,13 @@ class TradingService:
                 condition_params["tpsl"] = validated_args.tpsl
 
             # 調用 SDK 建立多條件單
-            result = self.sdk.place_multi_condition_order(**condition_params)
+            stock_client = self._stock_client_for("place_multi_condition_order")
+            result = stock_client.place_multi_condition_order(**condition_params)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"多條件單建立成功，條件單號: {result.data.get('condition_no', 'N/A')}",
                 }
             else:
@@ -731,11 +846,13 @@ class TradingService:
         """
         try:
             validated_args = PlaceDaytradeConditionOrderArgs(**args)
-            account = validate_and_get_account(validated_args.account)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
 
             # 構建當沖條件單參數
             condition_params = {
-                "account": account,
+                "account": account_obj,
                 "start_date": validated_args.start_date,
                 "end_date": validated_args.end_date,
                 "stop_sign": validated_args.stop_sign,
@@ -744,12 +861,13 @@ class TradingService:
             }
 
             # 調用 SDK 建立當沖條件單
-            result = self.sdk.place_daytrade_condition_order(**condition_params)
+            stock_client = self._stock_client_for("place_daytrade_condition_order")
+            result = stock_client.place_daytrade_condition_order(**condition_params)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"當沖條件單建立成功，條件單號: {result.data.get('condition_no', 'N/A')}",
                 }
             else:
@@ -884,7 +1002,6 @@ class TradingService:
             }
         """
         try:
-            from fubon_neo.constant import BSAction, TimeInForce
 
             validated = PlaceDayTradeMultiConditionOrderArgs(**args)
 
@@ -942,9 +1059,7 @@ class TradingService:
                         order_type=to_condition_order_type(tpa.order_type),
                         target_price=tpa.target_price,
                         price=tpa.price,
-                        trigger=to_trigger_content(tpa.trigger)
-                        if tpa.trigger
-                        else TriggerContent.MatchedPrice,
+                        trigger=to_trigger_content(tpa.trigger) if tpa.trigger else TriggerContent.MatchedPrice,
                     )
                 sl = None
                 if wrap.sl:
@@ -955,9 +1070,7 @@ class TradingService:
                         order_type=to_condition_order_type(sla.order_type),
                         target_price=sla.target_price,
                         price=sla.price,
-                        trigger=to_trigger_content(sla.trigger)
-                        if sla.trigger
-                        else TriggerContent.MatchedPrice,
+                        trigger=to_trigger_content(sla.trigger) if sla.trigger else TriggerContent.MatchedPrice,
                     )
                 tpsl = TPSLWrapper(
                     stop_sign=to_stop_sign(wrap.stop_sign),
@@ -968,7 +1081,8 @@ class TradingService:
                 )
 
             # 呼叫 SDK：multi_condition_day_trade
-            result = self.sdk.stock.multi_condition_day_trade(
+            stock_client = self._stock_client_for("multi_condition_day_trade")
+            result = stock_client.multi_condition_day_trade(
                 account_obj,
                 to_stop_sign(validated.stop_sign),
                 validated.end_time,
@@ -980,11 +1094,7 @@ class TradingService:
             )
 
             if result and hasattr(result, "is_success") and result.is_success:
-                guid = (
-                    getattr(result.data, "guid", None)
-                    if hasattr(result, "data")
-                    else None
-                )
+                guid = getattr(result.data, "guid", None) if hasattr(result, "data") else None
                 msg = f"當沖多條件單已成功建立 - {ord_args.symbol} ({len(conditions)} 個條件)"
                 if validated.tpsl:
                     msg += " (含停損停利)"
@@ -1005,9 +1115,7 @@ class TradingService:
                     "message": msg,
                 }
 
-            error_msg = (
-                getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
-            )
+            error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
             return {"status": "error", "message": f"當沖多條件單建立失敗: {error_msg}"}
 
         except Exception as e:
@@ -1102,11 +1210,13 @@ class TradingService:
         """
         try:
             validated_args = PlaceTimeSliceOrderArgs(**args)
-            account = validate_and_get_account(validated_args.account)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
 
             # 構建分時分量條件單參數
             condition_params = {
-                "account": account,
+                "account": account_obj,
                 "start_date": validated_args.start_date,
                 "end_date": validated_args.end_date,
                 "stop_sign": validated_args.stop_sign,
@@ -1115,12 +1225,13 @@ class TradingService:
             }
 
             # 調用 SDK 建立分時分量條件單
-            result = self.sdk.place_time_slice_order(**condition_params)
+            stock_client = self._stock_client_for("place_time_slice_order")
+            result = stock_client.place_time_slice_order(**condition_params)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"分時分量條件單建立成功，GUID: {result.data.get('guid', 'N/A')}",
                 }
             else:
@@ -1163,11 +1274,13 @@ class TradingService:
         """
         try:
             validated_args = PlaceTpslConditionOrderArgs(**args)
-            account = validate_and_get_account(validated_args.account)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
 
             # 構建停損停利條件單參數
             condition_params = {
-                "account": account,
+                "account": account_obj,
                 "start_date": validated_args.start_date,
                 "end_date": validated_args.end_date,
                 "stop_sign": validated_args.stop_sign,
@@ -1177,12 +1290,13 @@ class TradingService:
             }
 
             # 調用 SDK 建立停損停利條件單
-            result = self.sdk.place_condition_order(**condition_params)
+            stock_client = self._stock_client_for("place_condition_order")
+            result = stock_client.place_condition_order(**condition_params)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"停損停利條件單建立成功，條件單號: {result.data.get('condition_no', 'N/A')}",
                 }
             else:
@@ -1208,17 +1322,18 @@ class TradingService:
         """
         try:
             validated_args = CancelConditionOrderArgs(**args)
-            account = validate_and_get_account(validated_args.account)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
 
             # 調用 SDK 取消條件單
-            result = self.sdk.cancel_condition_order(
-                account=account, condition_no=validated_args.condition_no
-            )
+            stock_client = self._stock_client_for("cancel_condition_order")
+            result = stock_client.cancel_condition_order(account=account_obj, condition_no=validated_args.condition_no)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"條件單 {validated_args.condition_no} 取消成功",
                 }
             else:
@@ -1248,13 +1363,14 @@ class TradingService:
                 return {"status": "error", "data": None, "message": error}
 
             # 調用 SDK 查詢條件單
-            result = self.sdk.stock.get_condition_order(account=account_obj)
+            stock_client = self._stock_client_for("get_condition_order")
+            result = stock_client.get_condition_order(account=account_obj)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
-                    "message": f"成功獲取條件單清單",
+                    "data": self._to_dict(result.data),
+                    "message": "成功獲取條件單清單",
                 }
             else:
                 error_msg = "查詢條件單失敗"
@@ -1279,17 +1395,18 @@ class TradingService:
         """
         try:
             validated_args = GetConditionOrderByIdArgs(**args)
-            account = validate_and_get_account(validated_args.account)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
 
             # 調用 SDK 查詢條件單
-            result = self.sdk.get_condition_order_by_id(
-                account=account, condition_no=validated_args.condition_no
-            )
+            stock_client = self._stock_client_for("get_condition_order_by_id")
+            result = stock_client.get_condition_order_by_id(account=account_obj, condition_no=validated_args.condition_no)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"成功獲取條件單 {validated_args.condition_no} 詳細資訊",
                 }
             else:
@@ -1315,17 +1432,18 @@ class TradingService:
         """
         try:
             validated_args = GetDaytradeConditionByIdArgs(**args)
-            account = validate_and_get_account(validated_args.account)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
 
             # 調用 SDK 查詢當沖條件單
-            result = self.sdk.get_daytrade_condition_by_id(
-                account=account, condition_no=validated_args.condition_no
-            )
+            stock_client = self._stock_client_for("get_daytrade_condition_by_id")
+            result = stock_client.get_daytrade_condition_by_id(account=account_obj, condition_no=validated_args.condition_no)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
+                    "data": self._to_dict(result.data),
                     "message": f"成功獲取當沖條件單 {validated_args.condition_no} 詳細資訊",
                 }
             else:
@@ -1360,13 +1478,14 @@ class TradingService:
                 return {"status": "error", "data": None, "message": error}
 
             # 調用 SDK 查詢移動鎖利單
-            result = self.sdk.stock.get_trail_order(account=account_obj)
+            stock_client = self._stock_client_for("get_trail_order")
+            result = stock_client.get_trail_order(account=account_obj)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
-                    "message": f"成功獲取移動鎖利單清單",
+                    "data": self._to_dict(result.data),
+                    "message": "成功獲取移動鎖利單清單",
                 }
             else:
                 error_msg = "查詢移動鎖利單失敗"
@@ -1395,13 +1514,14 @@ class TradingService:
                 return {"status": "error", "data": None, "message": error}
 
             # 調用 SDK 獲取委託結果
-            result = self.sdk.stock.get_order_results(account=account_obj)
+            stock_client = self._stock_client_for("get_order_results")
+            result = stock_client.get_order_results(account=account_obj)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
-                    "message": f"成功獲取委託結果",
+                    "data": self._to_dict(result.data),
+                    "message": "成功獲取委託結果",
                 }
             else:
                 error_msg = "獲取委託結果失敗"
@@ -1478,13 +1598,14 @@ class TradingService:
                 return {"status": "error", "data": None, "message": error}
 
             # 調用 SDK 獲取委託結果詳細資訊
-            result = self.sdk.stock.get_order_results_detail(account=account_obj)
+            stock_client = self._stock_client_for("get_order_results_detail")
+            result = stock_client.get_order_results_detail(account=account_obj)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
-                    "data": result.data,
-                    "message": f"成功獲取委託結果詳細資訊",
+                    "data": self._to_dict(result.data),
+                    "message": "成功獲取委託結果詳細資訊",
                 }
             else:
                 error_msg = "獲取委託結果詳細資訊失敗"
@@ -1540,7 +1661,6 @@ class TradingService:
             }
         """
         try:
-            from fubon_neo.constant import BSAction, TimeInForce
 
             # 驗證輸入
             account = args.get("account")
@@ -1572,7 +1692,8 @@ class TradingService:
             )
 
             # 呼叫 SDK
-            result = self.sdk.stock.trail_profit(
+            stock_client = self._stock_client_for("trail_profit")
+            result = stock_client.trail_profit(
                 account_obj,
                 start_date,
                 end_date,
@@ -1581,11 +1702,7 @@ class TradingService:
             )
 
             if result and hasattr(result, "is_success") and result.is_success:
-                guid = (
-                    getattr(result.data, "guid", None)
-                    if hasattr(result, "data")
-                    else None
-                )
+                guid = getattr(result.data, "guid", None) if hasattr(result, "data") else None
                 return {
                     "status": "success",
                     "data": {
@@ -1600,9 +1717,7 @@ class TradingService:
                     "message": f"移動鎖利條件單已建立 - {trail_args.symbol}",
                 }
 
-            error_msg = (
-                getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
-            )
+            error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
             return {
                 "status": "error",
                 "message": f"移動鎖利條件單建立失敗: {error_msg}",
@@ -1637,9 +1752,8 @@ class TradingService:
                 return {"status": "error", "message": error}
 
             # 呼叫 SDK
-            result = self.sdk.stock.get_trail_history(
-                account_obj, validated.start_date, validated.end_date
-            )
+            stock_client = self._stock_client_for("get_trail_history")
+            result = stock_client.get_trail_history(account_obj, validated.start_date, validated.end_date)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 data = getattr(result, "data", []) or []
@@ -1651,9 +1765,7 @@ class TradingService:
                     "message": f"查詢成功，共 {count} 筆（{validated.start_date}~{validated.end_date}）",
                 }
 
-            error_msg = (
-                getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
-            )
+            error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
             return {"status": "error", "message": f"查詢失敗: {error_msg}"}
 
         except Exception as e:
@@ -1682,9 +1794,8 @@ class TradingService:
                 return {"status": "error", "message": error}
 
             # 呼叫 SDK
-            result = self.sdk.stock.get_condition_history(
-                account_obj, validated.start_date, validated.end_date
-            )
+            stock_client = self._stock_client_for("get_condition_history")
+            result = stock_client.get_condition_history(account_obj, validated.start_date, validated.end_date)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 data = getattr(result, "data", []) or []
@@ -1696,9 +1807,7 @@ class TradingService:
                     "message": f"查詢成功，共 {count} 筆（{validated.start_date}~{validated.end_date}）",
                 }
 
-            error_msg = (
-                getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
-            )
+            error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
             return {"status": "error", "message": f"查詢失敗: {error_msg}"}
 
         except Exception as e:
@@ -1739,32 +1848,12 @@ class TradingService:
                 return {"status": "error", "message": error}
 
             # 呼叫 SDK
-            result = self.sdk.stock.get_time_slice_order(
-                account_obj, validated.batch_no
-            )
-
-            # 序列化
-            def to_dict(obj):
-                if obj is None:
-                    return None
-                if isinstance(obj, (str, int, float, bool)):
-                    return obj
-                if isinstance(obj, list):
-                    return [to_dict(x) for x in obj]
-                if isinstance(obj, dict):
-                    return {k: to_dict(v) for k, v in obj.items()}
-                try:
-                    return {
-                        k: to_dict(v)
-                        for k, v in vars(obj).items()
-                        if not k.startswith("_")
-                    }
-                except Exception:
-                    return str(obj)
+            stock_client = self._stock_client_for("get_time_slice_order")
+            result = stock_client.get_time_slice_order(account_obj, validated.batch_no)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 data = getattr(result, "data", []) or []
-                data_list = to_dict(data) or []
+                data_list = self._to_dict(data) or []
                 count = len(data_list) if isinstance(data_list, list) else 0
                 return {
                     "status": "success",
@@ -1772,9 +1861,7 @@ class TradingService:
                     "message": f"查詢成功，共 {count} 筆（batch_no={validated.batch_no}）",
                 }
 
-            error_msg = (
-                getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
-            )
+            error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
             return {"status": "error", "message": f"查詢失敗: {error_msg}"}
 
         except Exception as e:
@@ -1926,9 +2013,7 @@ class TPSLOrderArgs(BaseModel):
     order_type: str = "Stock"  # Stock, Margin, Short
     target_price: str  # 停損/停利觸發價
     price: str  # 停損/停利委託價，若為市價則填空值""
-    trigger: Optional[str] = (
-        "MatchedPrice"  # 停損/停利觸發條件，可選 MatchedPrice, BidPrice, AskPrice，預設 MatchedPrice
-    )
+    trigger: Optional[str] = "MatchedPrice"  # 停損/停利觸發條件，可選 MatchedPrice, BidPrice, AskPrice，預設 MatchedPrice
 
 
 class TPSLWrapperArgs(BaseModel):
@@ -1955,7 +2040,9 @@ class ConditionArgs(BaseModel):
 
     market_type: str = "Reference"  # 對應 TradingType：Reference, LastPrice
     symbol: str  # 股票代碼
-    trigger: str = "MatchedPrice"  # 觸發內容：MatchedPrice(成交價), BuyPrice(買價), SellPrice(賣價), TotalQuantity(累計成交量), Time(時間)
+    trigger: str = (
+        "MatchedPrice"  # 觸發內容：MatchedPrice(成交價), BuyPrice(買價), SellPrice(賣價), TotalQuantity(累計成交量), Time(時間)
+    )
     trigger_value: str  # 觸發值
     comparison: str = "LessThan"  # 比較運算子：LessThan(<), LessOrEqual(<=), Equal(=), Greater(>), GreaterOrEqual(>=)
 

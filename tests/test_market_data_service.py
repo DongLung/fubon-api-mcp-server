@@ -18,14 +18,15 @@ pytest tests/test_market_data_service.py::TestMarketDataServiceMock -v
 pytest tests/test_market_data_service.py::TestMarketDataServiceIntegration -v
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
-import pandas as pd
+from types import SimpleNamespace
+from unittest.mock import MagicMock, Mock, patch
+
 import numpy as np
+import pandas as pd
+import pytest
 
 from fubon_api_mcp_server.market_data_service import MarketDataService
-from types import SimpleNamespace
 
 
 class TestMarketDataServiceMock:
@@ -62,7 +63,7 @@ class TestMarketDataServiceMock:
     @pytest.fixture
     def market_data_service(self, mock_mcp, base_data_dir, mock_reststock, mock_restfutopt, mock_sdk):
         """建立 MarketDataService 實例"""
-        with patch('fubon_api_mcp_server.market_data_service.MarketDataService._create_tables'):
+        with patch("fubon_api_mcp_server.market_data_service.MarketDataService._create_tables"):
             service = MarketDataService(mock_mcp, base_data_dir, mock_reststock, mock_restfutopt, mock_sdk)
         return service
 
@@ -77,48 +78,61 @@ class TestMarketDataServiceMock:
     def test_historical_candles_local_data(self, market_data_service):
         """測試獲取歷史數據 - 使用本地數據"""
         # 模擬本地數據存在
-        mock_df = pd.DataFrame({
-            'date': pd.to_datetime(['2024-01-01', '2024-01-02']),
-            'open': [100, 101],
-            'high': [105, 106],
-            'low': [95, 96],
-            'close': [102, 103],
-            'volume': [1000, 1100]
-        })
+        mock_df = pd.DataFrame(
+            {
+                "date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                "open": [100, 101],
+                "high": [105, 106],
+                "low": [95, 96],
+                "close": [102, 103],
+                "volume": [1000, 1100],
+            }
+        )
 
-        with patch.object(market_data_service, '_read_local_stock_data', return_value=mock_df):
-            result = market_data_service.historical_candles({
-                "symbol": "2330",
-                "from_date": "2024-01-01",
-                "to_date": "2024-01-02"
-            })
+        with patch.object(market_data_service, "_read_local_stock_data", return_value=mock_df):
+            result = market_data_service.historical_candles(
+                {"symbol": "2330", "from_date": "2024-01-01", "to_date": "2024-01-02"}
+            )
 
         assert result["status"] == "success"
         assert "data" in result
         assert "成功從本地數據獲取" in result["message"]
 
-    @patch('fubon_api_mcp_server.market_data_service.pd.to_datetime')
-    @patch('fubon_api_mcp_server.market_data_service.pd.Timedelta')
+    @patch("fubon_api_mcp_server.market_data_service.pd.to_datetime")
+    @patch("fubon_api_mcp_server.market_data_service.pd.Timedelta")
     def test_historical_candles_api_data(self, mock_timedelta, mock_to_datetime, market_data_service):
         """測試獲取歷史數據 - 使用 API 數據"""
         # 模擬本地數據不存在，API 返回數據
-        with patch.object(market_data_service, '_read_local_stock_data', return_value=None), \
-             patch.object(market_data_service, '_fetch_api_historical_data', return_value=[
-                 {'date': '2024-01-01', 'open': 100, 'high': 105, 'low': 95, 'close': 102, 'volume': 1000}
-             ]), \
-             patch.object(market_data_service, '_process_historical_data') as mock_process, \
-             patch.object(market_data_service, '_save_to_local_db'):
+        with (
+            patch.object(market_data_service, "_read_local_stock_data", return_value=None),
+            patch.object(
+                market_data_service,
+                "_fetch_api_historical_data",
+                return_value=[{"date": "2024-01-01", "open": 100, "high": 105, "low": 95, "close": 102, "volume": 1000}],
+            ),
+            patch.object(market_data_service, "_process_historical_data") as mock_process,
+            patch.object(market_data_service, "_save_to_local_db"),
+        ):
 
-            mock_process.return_value = pd.DataFrame([{
-                'date': '2024-01-01', 'open': 100, 'high': 105, 'low': 95, 'close': 102, 'volume': 1000,
-                'vol_value': 102000, 'price_change': 2, 'change_ratio': 2.0
-            }])
+            mock_process.return_value = pd.DataFrame(
+                [
+                    {
+                        "date": "2024-01-01",
+                        "open": 100,
+                        "high": 105,
+                        "low": 95,
+                        "close": 102,
+                        "volume": 1000,
+                        "vol_value": 102000,
+                        "price_change": 2,
+                        "change_ratio": 2.0,
+                    }
+                ]
+            )
 
-            result = market_data_service.historical_candles({
-                "symbol": "2330",
-                "from_date": "2024-01-01",
-                "to_date": "2024-01-02"
-            })
+            result = market_data_service.historical_candles(
+                {"symbol": "2330", "from_date": "2024-01-01", "to_date": "2024-01-02"}
+            )
 
         assert result["status"] == "success"
         assert "data" in result
@@ -129,7 +143,7 @@ class TestMarketDataServiceMock:
         # 模擬 API 返回
         mock_result = [
             {"symbol": "2330", "name": "台積電", "market": "TSE"},
-            {"symbol": "0050", "name": "元大台灣50", "market": "TSE"}
+            {"symbol": "0050", "name": "元大台灣50", "market": "TSE"},
         ]
         market_data_service.reststock.intraday.tickers.return_value = mock_result
 
@@ -152,11 +166,7 @@ class TestMarketDataServiceMock:
         """測試獲取股票基本資料成功"""
         # 模擬 API 返回
         mock_result = Mock()
-        mock_result.dict.return_value = {
-            "symbol": "2330",
-            "name": "台積電",
-            "securityType": "01"
-        }
+        mock_result.dict.return_value = {"symbol": "2330", "name": "台積電", "securityType": "01"}
         market_data_service.reststock.intraday.ticker.return_value = mock_result
 
         result = market_data_service.get_intraday_ticker({"symbol": "2330"})
@@ -177,11 +187,7 @@ class TestMarketDataServiceMock:
         """測試獲取股票即時報價成功"""
         # 模擬 API 返回
         mock_result = Mock()
-        mock_result.dict.return_value = {
-            "symbol": "2330",
-            "lastPrice": 650.0,
-            "change": 5.0
-        }
+        mock_result.dict.return_value = {"symbol": "2330", "lastPrice": 650.0, "change": 5.0}
         market_data_service.reststock.intraday.quote.return_value = mock_result
 
         result = market_data_service.get_intraday_quote({"symbol": "2330"})
@@ -202,13 +208,10 @@ class TestMarketDataServiceMock:
         """測試獲取股票行情快照成功"""
         # 模擬 API 返回
         mock_result = {
-            "data": [
-                {"symbol": "2330", "lastPrice": 650.0},
-                {"symbol": "0050", "lastPrice": 120.0}
-            ],
+            "data": [{"symbol": "2330", "lastPrice": 650.0}, {"symbol": "0050", "lastPrice": 120.0}],
             "market": "TSE",
             "date": "20241113",
-            "time": "09:00:00"
+            "time": "09:00:00",
         }
         market_data_service.reststock.snapshot.quotes.return_value = mock_result
 
@@ -229,15 +232,12 @@ class TestMarketDataServiceMock:
         """測試獲取股票漲跌幅排行成功"""
         # 模擬 API 返回
         mock_result = {
-            "data": [
-                {"symbol": "2330", "changePercent": 2.5},
-                {"symbol": "0050", "changePercent": 1.8}
-            ],
+            "data": [{"symbol": "2330", "changePercent": 2.5}, {"symbol": "0050", "changePercent": 1.8}],
             "market": "TSE",
             "direction": "up",
             "change": "percent",
             "date": "20241113",
-            "time": "09:00:00"
+            "time": "09:00:00",
         }
         market_data_service.reststock.snapshot.movers.return_value = mock_result
 
@@ -256,14 +256,11 @@ class TestMarketDataServiceMock:
         """測試獲取股票成交量值排行成功"""
         # 模擬 API 返回
         mock_result = {
-            "data": [
-                {"symbol": "2330", "tradeVolume": 10000},
-                {"symbol": "0050", "tradeVolume": 8000}
-            ],
+            "data": [{"symbol": "2330", "tradeVolume": 10000}, {"symbol": "0050", "tradeVolume": 8000}],
             "market": "TSE",
             "trade": "volume",
             "date": "20241113",
-            "time": "09:00:00"
+            "time": "09:00:00",
         }
         market_data_service.reststock.snapshot.actives.return_value = mock_result
 
@@ -284,9 +281,9 @@ class TestMarketDataServiceMock:
         mock_result = {
             "data": [
                 {"symbol": "TX00", "name": "台指期", "type": "FUTURE"},
-                {"symbol": "TE00C24000", "name": "台指選擇權", "type": "OPTION"}
+                {"symbol": "TE00C24000", "name": "台指選擇權", "type": "OPTION"},
             ],
-            "type": "FUTURE"
+            "type": "FUTURE",
         }
         market_data_service.restfutopt.intraday.tickers.return_value = mock_result
 
@@ -310,11 +307,7 @@ class TestMarketDataServiceMock:
     def test_get_intraday_futopt_ticker_success(self, market_data_service):
         """測試獲取期貨/選擇權個別合約基本資訊成功"""
         # 模擬 API 返回
-        mock_result = {
-            "symbol": "TX00",
-            "name": "台指期",
-            "referencePrice": 18000.0
-        }
+        mock_result = {"symbol": "TX00", "name": "台指期", "referencePrice": 18000.0}
         market_data_service.restfutopt.intraday.ticker.return_value = mock_result
 
         result = market_data_service.get_intraday_futopt_ticker({"symbol": "TX00"})
@@ -325,6 +318,7 @@ class TestMarketDataServiceMock:
 
     def test_get_intraday_futopt_ticker_failure_message_list(self, market_data_service):
         """測試期貨/選擇權合約基本資訊 API 回傳失敗訊息陣列"""
+
         class ErrObj:
             def __init__(self):
                 self.message = ["err1", "err2"]
@@ -338,11 +332,7 @@ class TestMarketDataServiceMock:
     def test_get_intraday_futopt_quote_success(self, market_data_service):
         """測試獲取期貨/選擇權即時報價成功"""
         # 模擬 API 返回
-        mock_result = {
-            "symbol": "TX00",
-            "lastPrice": 18050.0,
-            "change": 50.0
-        }
+        mock_result = {"symbol": "TX00", "lastPrice": 18050.0, "change": 50.0}
         market_data_service.restfutopt.intraday.quote.return_value = mock_result
 
         result = market_data_service.get_intraday_futopt_quote({"symbol": "TX00"})
@@ -354,15 +344,17 @@ class TestMarketDataServiceMock:
     def test_get_trading_signals_success(self, market_data_service):
         """測試獲取交易訊號成功"""
         # 模擬本地數據 - 需要足夠的數據點來計算指標
-        mock_df = pd.DataFrame({
-            'date': pd.date_range('2024-01-01', periods=50),
-            'close': [100 + i + np.sin(i/10)*5 for i in range(50)],
-            'high': [105 + i + np.sin(i/10)*5 for i in range(50)],
-            'low': [95 + i + np.sin(i/10)*5 for i in range(50)],
-            'volume': [1000 + i*100 for i in range(50)]
-        })
+        mock_df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=50),
+                "close": [100 + i + np.sin(i / 10) * 5 for i in range(50)],
+                "high": [105 + i + np.sin(i / 10) * 5 for i in range(50)],
+                "low": [95 + i + np.sin(i / 10) * 5 for i in range(50)],
+                "volume": [1000 + i * 100 for i in range(50)],
+            }
+        )
 
-        with patch.object(market_data_service, '_read_local_stock_data', return_value=mock_df):
+        with patch.object(market_data_service, "_read_local_stock_data", return_value=mock_df):
             result = market_data_service.get_trading_signals({"symbol": "2330"})
 
         assert result["status"] == "success"
@@ -371,7 +363,7 @@ class TestMarketDataServiceMock:
         assert "indicators" in result["data"]
         assert "交易訊號分析成功" in result["message"]
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_query_symbol_snapshot_success(self, mock_validate, market_data_service):
         """測試查詢股票快照報價成功"""
         # 模擬帳戶驗證
@@ -384,34 +376,31 @@ class TestMarketDataServiceMock:
         mock_result.data = [{"symbol": "2330", "price": 650.0}]
         market_data_service.sdk.stock.query_symbol_snapshot.return_value = mock_result
 
-        result = market_data_service.query_symbol_snapshot({
-            "account": "1234567",
-            "market_type": "Common",
-            "stock_type": ["Stock"]
-        })
+        result = market_data_service.query_symbol_snapshot(
+            {"account": "1234567", "market_type": "Common", "stock_type": ["Stock"]}
+        )
 
         assert result["status"] == "success"
         assert result["data"] == [{"symbol": "2330", "price": 650.0}]
         assert "成功查詢快照報價" in result["message"]
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_query_symbol_snapshot_with_object_return(self, mock_validate, market_data_service):
         """測試 query_symbol_snapshot 在 SDK 回傳物件（非 dict）時仍能正規化"""
         mock_account = Mock()
         mock_validate.return_value = (mock_account, None)
 
         from types import SimpleNamespace
+
         item = SimpleNamespace(symbol="2330", price=650.0)
         mock_result = Mock()
         mock_result.is_success = True
         mock_result.data = [item]
         market_data_service.sdk.stock.query_symbol_snapshot.return_value = mock_result
 
-        result = market_data_service.query_symbol_snapshot({
-            "account": "1234567",
-            "market_type": "Common",
-            "stock_type": ["Stock"]
-        })
+        result = market_data_service.query_symbol_snapshot(
+            {"account": "1234567", "market_type": "Common", "stock_type": ["Stock"]}
+        )
 
         assert result["status"] == "success"
         assert isinstance(result["data"], list)
@@ -419,7 +408,7 @@ class TestMarketDataServiceMock:
         assert result["data"][0]["symbol"] == "2330"
         assert result["data"][0]["price"] == 650.0
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_query_symbol_quote_success(self, mock_validate, market_data_service):
         """測試查詢商品漲跌幅報表成功"""
         # 模擬帳戶驗證
@@ -432,39 +421,34 @@ class TestMarketDataServiceMock:
         mock_result.data = {"symbol": "2330", "last_price": 650.0}
         market_data_service.sdk.stock.query_symbol_quote.return_value = mock_result
 
-        result = market_data_service.query_symbol_quote({
-            "account": "1234567",
-            "symbol": "2330"
-        })
+        result = market_data_service.query_symbol_quote({"account": "1234567", "symbol": "2330"})
 
         assert result["status"] == "success"
         assert isinstance(result["data"], dict)
         assert result["data"]["symbol"] == "2330"
         assert "成功獲取股票 2330 報價資訊" in result["message"]
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_query_symbol_quote_object_return(self, mock_validate, market_data_service):
         """測試 query_symbol_quote 在 SDK 回傳物件（非 dict）時仍能正規化"""
         mock_account = Mock()
         mock_validate.return_value = (mock_account, None)
 
         from types import SimpleNamespace
+
         data_obj = SimpleNamespace(symbol="2330", last_price=600.0)
         mock_result = Mock()
         mock_result.is_success = True
         mock_result.data = data_obj
         market_data_service.sdk.stock.query_symbol_quote.return_value = mock_result
 
-        result = market_data_service.query_symbol_quote({
-            "account": "1234567",
-            "symbol": "2330"
-        })
+        result = market_data_service.query_symbol_quote({"account": "1234567", "symbol": "2330"})
 
         assert result["status"] == "success"
         assert result["data"]["symbol"] == "2330"
         assert result["data"]["last_price"] == 600.0
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_margin_quota_success(self, mock_validate, market_data_service):
         """測試查詢資券配額成功"""
         # 模擬帳戶驗證
@@ -477,16 +461,13 @@ class TestMarketDataServiceMock:
         mock_result.data = {"margin_tradable_quota": 100000}
         market_data_service.sdk.stock.margin_quota.return_value = mock_result
 
-        result = market_data_service.margin_quota({
-            "account": "1234567",
-            "stock_no": "2330"
-        })
+        result = market_data_service.margin_quota({"account": "1234567", "stock_no": "2330"})
 
         assert result["status"] == "success"
         assert result["data"]["margin_tradable_quota"] == 100000
         assert "成功獲取帳戶 1234567 股票 2330 資券配額" in result["message"]
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_margin_quota_with_object_return(self, mock_validate, market_data_service):
         """測試資券配額在 SDK 回傳物件（非 dict）時仍能正規化"""
         mock_account = Mock()
@@ -494,38 +475,34 @@ class TestMarketDataServiceMock:
 
         # 物件風格回傳（沒有 dict() 方法）
         from types import SimpleNamespace
+
         data_obj = SimpleNamespace(margin_tradable_quota=50000)
         mock_result = Mock()
         mock_result.is_success = True
         mock_result.data = data_obj
         market_data_service.sdk.stock.margin_quota.return_value = mock_result
 
-        result = market_data_service.margin_quota({
-            "account": "1234567",
-            "stock_no": "2330"
-        })
+        result = market_data_service.margin_quota({"account": "1234567", "stock_no": "2330"})
 
         assert result["status"] == "success"
         assert isinstance(result["data"], dict)
         assert result["data"]["margin_tradable_quota"] == 50000
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_daytrade_and_stock_info_object_return(self, mock_validate, market_data_service):
         """測試 daytrade_and_stock_info 在 SDK 回傳物件（非 dict）時仍能正規化"""
         mock_account = Mock()
         mock_validate.return_value = (mock_account, None)
 
         from types import SimpleNamespace
+
         data_obj = SimpleNamespace(stock_no="2330", daytrade_tradable_quota=3000)
         mock_result = Mock()
         mock_result.is_success = True
         mock_result.data = data_obj
         market_data_service.sdk.stock.daytrade_and_stock_info.return_value = mock_result
 
-        result = market_data_service.daytrade_and_stock_info({
-            "account": "1234567",
-            "stock_no": "2330"
-        })
+        result = market_data_service.daytrade_and_stock_info({"account": "1234567", "stock_no": "2330"})
 
         assert result["status"] == "success"
         assert isinstance(result["data"], dict)
@@ -535,6 +512,7 @@ class TestMarketDataServiceMock:
     def test_normalize_result_handles_mock_object(self, market_data_service):
         """直接測試 _normalize_result 能夠處理 Mock 物件並回傳 dict"""
         from types import SimpleNamespace
+
         item = SimpleNamespace(symbol="2330", price=650.0)
         normalized = market_data_service._normalize_result(item)
         assert isinstance(normalized, dict)
@@ -543,6 +521,7 @@ class TestMarketDataServiceMock:
 
     def test_normalize_result_with_dict_method(self, market_data_service):
         """測試 _normalize_result 處理有 dict() 方法的物件"""
+
         class ObjWithDict:
             def dict(self):
                 return {"a": 1, "b": 2}
@@ -550,7 +529,6 @@ class TestMarketDataServiceMock:
         normalized = market_data_service._normalize_result(ObjWithDict())
         assert isinstance(normalized, dict)
         assert normalized["a"] == 1 and normalized["b"] == 2
-
 
     def test_get_intraday_futopt_service_not_initialized(self, market_data_service):
         """測試期貨/選擇權服務未初始化"""
@@ -574,12 +552,10 @@ class TestMarketDataServiceMock:
 
     def test_historical_candles_exception(self, market_data_service):
         """測試歷史數據獲取異常"""
-        with patch.object(market_data_service, '_read_local_stock_data', side_effect=Exception("測試錯誤")):
-            result = market_data_service.historical_candles({
-                "symbol": "2330",
-                "from_date": "2024-01-01",
-                "to_date": "2024-01-02"
-            })
+        with patch.object(market_data_service, "_read_local_stock_data", side_effect=Exception("測試錯誤")):
+            result = market_data_service.historical_candles(
+                {"symbol": "2330", "from_date": "2024-01-01", "to_date": "2024-01-02"}
+            )
 
         assert result["status"] == "error"
         assert "獲取數據時發生錯誤" in result["message"]
@@ -596,15 +572,24 @@ class TestMarketDataServiceMock:
     def test_get_market_overview_success(self, market_data_service):
         """測試市場概況成功返回"""
         # 準備 index 資料
-        tse_data = {"data": {"symbol": "IX0001", "name": "台股指數", "close": 18000, "chg": 50, "tradeVolume": 100000}, "date": "20241113"}
+        tse_data = {
+            "data": {"symbol": "IX0001", "name": "台股指數", "close": 18000, "chg": 50, "tradeVolume": 100000},
+            "date": "20241113",
+        }
         market_data_service.reststock.intraday.quote.return_value = SimpleNamespace(data=tse_data["data"])
 
         # movers and actives
         class Movers:
             def __init__(self):
                 self.data = [{}, {}, {}]
-        market_data_service.reststock.snapshot.movers.side_effect = [SimpleNamespace(data=[{}, {}]), SimpleNamespace(data=[{}])]
-        market_data_service.reststock.snapshot.actives.return_value = SimpleNamespace(data=[{"tradeVolume": 1000}, {"tradeVolume": 2000}])
+
+        market_data_service.reststock.snapshot.movers.side_effect = [
+            SimpleNamespace(data=[{}, {}]),
+            SimpleNamespace(data=[{}]),
+        ]
+        market_data_service.reststock.snapshot.actives.return_value = SimpleNamespace(
+            data=[{"tradeVolume": 1000}, {"tradeVolume": 2000}]
+        )
 
         result = market_data_service.get_market_overview()
         assert result["status"] == "success"
@@ -612,8 +597,8 @@ class TestMarketDataServiceMock:
 
     def test_normalize_various_types(self, market_data_service):
         """測試 _normalize_result 的各種支援型別"""
-        from dataclasses import dataclass
         from collections import namedtuple
+        from dataclasses import dataclass
 
         @dataclass
         class D:
@@ -656,21 +641,50 @@ class TestMarketDataServiceMock:
 
     def test_get_intraday_futopt_products_success(self, market_data_service):
         """測試期貨/選擇權產品列表成功回傳"""
-        market_data_service.restfutopt.intraday.products.return_value = {"data": [{"symbol": "TX00", "type": "FUTURE"}], "type": "FUTURE"}
+        market_data_service.restfutopt.intraday.products.return_value = {
+            "data": [{"symbol": "TX00", "type": "FUTURE"}],
+            "type": "FUTURE",
+        }
         result = market_data_service.get_intraday_futopt_products({"type": "FUTURE"})
         assert result["status"] == "success"
 
     def test_historical_candles_segmented_fetch(self, market_data_service):
         """測試歷史數據分段拉取 (超過一年) 的邏輯"""
         # patch _read_local_stock_data to return None
-        with patch.object(market_data_service, '_read_local_stock_data', return_value=None), \
-             patch.object(market_data_service, '_fetch_historical_data_segment', side_effect=[
-                 [{"date": "2020-01-01", "open": 100, "high": 105, "low": 95, "close": 102, "volume": 1000}],
-                 [{"date": "2021-01-01", "open": 101, "high": 106, "low": 96, "close": 103, "volume": 1100}]
-             ]), \
-             patch.object(market_data_service, '_process_historical_data', return_value=pd.DataFrame([{"date": "2021-01-01", "open": 101, "high": 106, "low": 96, "close": 103, "volume": 1100, "vol_value": 113300, "price_change": 2, "change_ratio": 1.98}])), \
-             patch.object(market_data_service, '_save_to_local_db'):
-            result = market_data_service.historical_candles({"symbol": "2330", "from_date": "2020-01-01", "to_date": "2022-01-01"})
+        with (
+            patch.object(market_data_service, "_read_local_stock_data", return_value=None),
+            patch.object(
+                market_data_service,
+                "_fetch_historical_data_segment",
+                side_effect=[
+                    [{"date": "2020-01-01", "open": 100, "high": 105, "low": 95, "close": 102, "volume": 1000}],
+                    [{"date": "2021-01-01", "open": 101, "high": 106, "low": 96, "close": 103, "volume": 1100}],
+                ],
+            ),
+            patch.object(
+                market_data_service,
+                "_process_historical_data",
+                return_value=pd.DataFrame(
+                    [
+                        {
+                            "date": "2021-01-01",
+                            "open": 101,
+                            "high": 106,
+                            "low": 96,
+                            "close": 103,
+                            "volume": 1100,
+                            "vol_value": 113300,
+                            "price_change": 2,
+                            "change_ratio": 1.98,
+                        }
+                    ]
+                ),
+            ),
+            patch.object(market_data_service, "_save_to_local_db"),
+        ):
+            result = market_data_service.historical_candles(
+                {"symbol": "2330", "from_date": "2020-01-01", "to_date": "2022-01-01"}
+            )
 
         assert result["status"] == "success"
 
@@ -794,6 +808,7 @@ class TestMarketDataServiceMock:
 
     def test_normalize_sdk_object_and_snake_case(self, market_data_service):
         """測試 _normalize_result 能處理具有 is_success 和 data 的 SDK 物件與 snake_case"""
+
         class SDKObj:
             def __init__(self):
                 self.is_success = True
@@ -827,7 +842,11 @@ class TestMarketDataServiceMock:
 
         res = market_data_service.get_intraday_futopt_candles({"symbol": "TX00"})
         assert res["status"] == "error"
-        assert "API 調用失敗" in res["message"] or "返回結果為 None" in res["message"] or "API 調用失敗，結果對象" in res["message"]
+        assert (
+            "API 調用失敗" in res["message"]
+            or "返回結果為 None" in res["message"]
+            or "API 調用失敗，結果對象" in res["message"]
+        )
 
     def test_get_intraday_trades_failure(self, market_data_service):
         market_data_service.reststock.intraday.trades.side_effect = Exception("API error")
@@ -837,6 +856,7 @@ class TestMarketDataServiceMock:
 
     def test_fetch_historical_data_segment_with_sdk_object(self, market_data_service):
         """測試 _fetch_historical_data_segment 針對 SDK 物件返回值的處理"""
+
         def fake_candles(**params):
             mock_res = Mock()
             mock_res.is_success = True
@@ -911,10 +931,12 @@ class TestMarketDataServiceMock:
 
     def test_normalize_inspect_public_attributes(self, market_data_service):
         """測試 _normalize_result 通過 dir() 探測公有屬性的情況"""
+
         class Attrs:
             def __init__(self):
                 self.price = 100
                 self.symbol = "2330"
+
             def method(self):
                 return 1
 
@@ -932,18 +954,33 @@ class TestMarketDataServiceMock:
         market_data_service.reststock.intraday.candles.return_value = [{"open": 100, "close": 101, "volume": 1000}]
         market_data_service.reststock.intraday.trades.return_value = [{"time": "09:00", "price": 100}]
         market_data_service.reststock.intraday.volumes.return_value = [{"price": 100, "volume": 1000}]
-        market_data_service.reststock.snapshot.quotes.return_value = {"data": [{"symbol": "2330"}], "market": "TSE", "date": "20250101"}
+        market_data_service.reststock.snapshot.quotes.return_value = {
+            "data": [{"symbol": "2330"}],
+            "market": "TSE",
+            "date": "20250101",
+        }
         market_data_service.reststock.snapshot.movers.return_value = {"data": [{"symbol": "2330"}], "market": "TSE"}
-        market_data_service.reststock.snapshot.actives.return_value = {"data": [{"symbol": "2330", "tradeVolume": 1000}], "market": "TSE"}
+        market_data_service.reststock.snapshot.actives.return_value = {
+            "data": [{"symbol": "2330", "tradeVolume": 1000}],
+            "market": "TSE",
+        }
         market_data_service.reststock.historical.stats.return_value = {"week52High": 700, "week52Low": 400}
         market_data_service.reststock.intraday.historical_stats.return_value = {"data": {}}
 
         # futopt endpoints
-        market_data_service.restfutopt.intraday.products.return_value = {"data": [{"symbol": "TX00", "type": "FUTURE"}], "type": "FUTURE"}
-        market_data_service.restfutopt.intraday.tickers.return_value = {"data": [{"symbol": "TX00", "name": "台指期", "type": "FUTURE"}], "type": "FUTURE"}
+        market_data_service.restfutopt.intraday.products.return_value = {
+            "data": [{"symbol": "TX00", "type": "FUTURE"}],
+            "type": "FUTURE",
+        }
+        market_data_service.restfutopt.intraday.tickers.return_value = {
+            "data": [{"symbol": "TX00", "name": "台指期", "type": "FUTURE"}],
+            "type": "FUTURE",
+        }
         market_data_service.restfutopt.intraday.ticker.return_value = {"symbol": "TX00", "name": "台指期"}
         market_data_service.restfutopt.intraday.quote.return_value = {"symbol": "TX00", "lastPrice": 18000}
-        market_data_service.restfutopt.intraday.candles.return_value = {"data": [{"open": 18000, "close": 18010, "volume": 10}]}
+        market_data_service.restfutopt.intraday.candles.return_value = {
+            "data": [{"open": 18000, "close": 18010, "volume": 10}]
+        }
         market_data_service.restfutopt.intraday.volumes.return_value = {"data": [{"price": 18000, "volume": 10}]}
         market_data_service.restfutopt.intraday.trades.return_value = {"data": [{"price": 18000, "time": "09:00"}]}
 
@@ -987,31 +1024,47 @@ class TestMarketDataServiceMock:
         """為多個 endpoint 提供不同型別返回值以覆蓋更多分支"""
         # Map methods to patch targets and args
         cases = [
-            ("reststock.intraday.tickers", market_data_service.get_intraday_tickers, {"market": "TSE"}, [
-                [{"symbol": "2330"}],
-                Mock(is_success=True, data=[{"symbol": "2330"}]),
-                Mock(message=["error1", "error2"]) ]),
-            ("reststock.intraday.ticker", market_data_service.get_intraday_ticker, {"symbol": "2330"}, [
-                Mock(dict=lambda: {"symbol": "2330"}),
-                Mock(is_success=True, data={"symbol": "2330"}),
-                {"symbol": "2330"}]),
-            ("reststock.snapshot.quotes", market_data_service.get_snapshot_quotes, {"market": "TSE"}, [
-                {"data": [{"symbol": "2330"}]},
-                Mock(data=[SimpleNamespace(symbol='2330')])]),
-            ("restfutopt.intraday.products", market_data_service.get_intraday_futopt_products, {}, [
-                {"data": [{"symbol": "TX00", "type": "FUTURE"}]},
-                Mock(is_success=True, data=[{"symbol": "TX00"}])]),
-            ("restfutopt.intraday.tickers", market_data_service.get_intraday_futopt_tickers, {"type": "FUTURE"}, [
-                {"data": [{"symbol": "TX00", "type": "FUTURE"}]},
-                Mock(is_success=True, data=[{"symbol": "TX00"}])]),
-            ("restfutopt.intraday.quote", market_data_service.get_intraday_futopt_quote, {"symbol": "TX00"}, [
-                {"symbol": "TX00", "lastPrice": 18000},
-                Mock(is_success=True, data={"symbol": "TX00"})]),
+            (
+                "reststock.intraday.tickers",
+                market_data_service.get_intraday_tickers,
+                {"market": "TSE"},
+                [[{"symbol": "2330"}], Mock(is_success=True, data=[{"symbol": "2330"}]), Mock(message=["error1", "error2"])],
+            ),
+            (
+                "reststock.intraday.ticker",
+                market_data_service.get_intraday_ticker,
+                {"symbol": "2330"},
+                [Mock(dict=lambda: {"symbol": "2330"}), Mock(is_success=True, data={"symbol": "2330"}), {"symbol": "2330"}],
+            ),
+            (
+                "reststock.snapshot.quotes",
+                market_data_service.get_snapshot_quotes,
+                {"market": "TSE"},
+                [{"data": [{"symbol": "2330"}]}, Mock(data=[SimpleNamespace(symbol="2330")])],
+            ),
+            (
+                "restfutopt.intraday.products",
+                market_data_service.get_intraday_futopt_products,
+                {},
+                [{"data": [{"symbol": "TX00", "type": "FUTURE"}]}, Mock(is_success=True, data=[{"symbol": "TX00"}])],
+            ),
+            (
+                "restfutopt.intraday.tickers",
+                market_data_service.get_intraday_futopt_tickers,
+                {"type": "FUTURE"},
+                [{"data": [{"symbol": "TX00", "type": "FUTURE"}]}, Mock(is_success=True, data=[{"symbol": "TX00"}])],
+            ),
+            (
+                "restfutopt.intraday.quote",
+                market_data_service.get_intraday_futopt_quote,
+                {"symbol": "TX00"},
+                [{"symbol": "TX00", "lastPrice": 18000}, Mock(is_success=True, data={"symbol": "TX00"})],
+            ),
         ]
 
         for target, func, args, returns in cases:
             # Use tuple notation to patch nested attribute like 'reststock.intraday.tickers'
-            parts = target.split('.')
+            parts = target.split(".")
             obj = market_data_service
             for p in parts[:-1]:
                 obj = getattr(obj, p)
@@ -1084,9 +1137,7 @@ class TestMarketDataServiceMock:
 
     def test_get_intraday_trades_success(self, market_data_service):
         """測試獲取成交明細成功"""
-        market_data_service.reststock.intraday.trades.return_value = [
-            {"time": "09:00:00", "price": 100, "volume": 100}
-        ]
+        market_data_service.reststock.intraday.trades.return_value = [{"time": "09:00:00", "price": 100, "volume": 100}]
 
         result = market_data_service.get_intraday_trades({"symbol": "2330"})
         assert result["status"] == "success"
@@ -1094,9 +1145,7 @@ class TestMarketDataServiceMock:
 
     def test_get_intraday_volumes_success(self, market_data_service):
         """測試獲取分價量表成功"""
-        market_data_service.reststock.intraday.volumes.return_value = [
-            {"price": 100, "volume": 1000}
-        ]
+        market_data_service.reststock.intraday.volumes.return_value = [{"price": 100, "volume": 1000}]
 
         result = market_data_service.get_intraday_volumes({"symbol": "2330"})
         assert result["status"] == "success"
@@ -1112,7 +1161,9 @@ class TestMarketDataServiceMock:
 
     def test_get_intraday_futopt_volumes_trades_success(self, market_data_service):
         market_data_service.restfutopt.intraday.volumes.return_value = {"data": [{"price": 18000, "volume": 10}]}
-        market_data_service.restfutopt.intraday.trades.return_value = {"data": [{"time": "09:00", "price": 18000, "volume": 10}]}
+        market_data_service.restfutopt.intraday.trades.return_value = {
+            "data": [{"time": "09:00", "price": 18000, "volume": 10}]
+        }
 
         res_vol = market_data_service.get_intraday_futopt_volumes({"symbol": "TX00"})
         res_trd = market_data_service.get_intraday_futopt_trades({"symbol": "TX00"})
@@ -1127,7 +1178,7 @@ class TestMarketDataServiceMock:
         assert result["status"] == "error"
         assert "錯誤" in result["message"] or "失敗" in result["message"]
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_query_symbol_snapshot_failure(self, mock_validate, market_data_service):
         mock_account = Mock()
         mock_validate.return_value = (mock_account, None)
@@ -1136,11 +1187,13 @@ class TestMarketDataServiceMock:
         mock_result.message = "API error"
         market_data_service.sdk.stock.query_symbol_snapshot.return_value = mock_result
 
-        result = market_data_service.query_symbol_snapshot({"account": "1234567", "market_type": "Common", "stock_type": ["Stock"]})
+        result = market_data_service.query_symbol_snapshot(
+            {"account": "1234567", "market_type": "Common", "stock_type": ["Stock"]}
+        )
         assert result["status"] == "error"
         assert "查詢快照報價失敗" in result["message"]
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_query_symbol_quote_failure(self, mock_validate, market_data_service):
         mock_account = Mock()
         mock_validate.return_value = (mock_account, None)
@@ -1153,7 +1206,7 @@ class TestMarketDataServiceMock:
         assert result["status"] == "error"
         assert "無法獲取" in result["message"] or "錯誤" in result["message"]
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_margin_quota_failure(self, mock_validate, market_data_service):
         mock_account = Mock()
         mock_validate.return_value = (mock_account, None)
@@ -1166,7 +1219,7 @@ class TestMarketDataServiceMock:
         assert result["status"] == "error"
         assert "API 調用失敗" in result["message"] or "失敗" in result["message"]
 
-    @patch('fubon_api_mcp_server.market_data_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
     def test_daytrade_and_stock_info_failure(self, mock_validate, market_data_service):
         mock_account = Mock()
         mock_validate.return_value = (mock_account, None)

@@ -18,9 +18,10 @@ pytest tests/test_trading_service.py::TestTradingServiceMock -v
 pytest tests/test_trading_service.py::TestTradingServiceIntegration -v
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 from mcp.server.fastmcp import FastMCP
 
 from fubon_api_mcp_server.trading_service import TradingService
@@ -70,7 +71,9 @@ class TestTradingServiceMock:
     def trading_service(self, mock_mcp, mock_sdk, base_data_dir, mock_reststock, mock_restfutopt):
         """建立 TradingService 實例"""
         sdk, accounts = mock_sdk
-        return TradingService(mock_mcp, sdk, [a.account for a in accounts.data], base_data_dir, mock_reststock, mock_restfutopt)
+        return TradingService(
+            mock_mcp, sdk, [a.account for a in accounts.data], base_data_dir, mock_reststock, mock_restfutopt
+        )
 
     def test_initialization(self, trading_service):
         """測試 TradingService 初始化"""
@@ -81,7 +84,7 @@ class TestTradingServiceMock:
         assert trading_service.reststock is not None
         assert trading_service.restfutopt is not None
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_place_order_success(self, mock_validate, trading_service):
         """測試下單成功"""
         # 模擬驗證成功
@@ -94,23 +97,25 @@ class TestTradingServiceMock:
         mock_result.data = {"order_no": "12345678"}
         trading_service.sdk.stock.place_order = Mock(return_value=mock_result)
 
-        result = trading_service.place_order({
-            "account": "1234567",
-            "buy_sell": "Buy",
-            "symbol": "2330",
-            "price": "500.0",
-            "quantity": 1000,
-            "market_type": "Common",
-            "price_type": "Limit",
-            "time_in_force": "ROD",
-            "order_type": "Stock"
-        })
+        result = trading_service.place_order(
+            {
+                "account": "1234567",
+                "buy_sell": "Buy",
+                "symbol": "2330",
+                "price": "500.0",
+                "quantity": 1000,
+                "market_type": "Common",
+                "price_type": "Limit",
+                "time_in_force": "ROD",
+                "order_type": "Stock",
+            }
+        )
 
         assert result["status"] == "success"
         assert "order_no" in result["data"]
         assert "委託單下單成功" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_place_order_failure(self, mock_validate, trading_service):
         """測試下單失敗"""
         # 模擬驗證成功
@@ -123,18 +128,14 @@ class TestTradingServiceMock:
         mock_result.message = "下單失敗：資金不足"
         trading_service.sdk.stock.place_order = Mock(return_value=mock_result)
 
-        result = trading_service.place_order({
-            "account": "1234567",
-            "buy_sell": "Buy",
-            "symbol": "2330",
-            "price": "500.0",
-            "quantity": 1000
-        })
+        result = trading_service.place_order(
+            {"account": "1234567", "buy_sell": "Buy", "symbol": "2330", "price": "500.0", "quantity": 1000}
+        )
 
         assert result["status"] == "error"
         assert "下單失敗" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_cancel_order_success(self, mock_validate, trading_service):
         """測試取消委託成功"""
         # 模擬驗證成功
@@ -146,15 +147,12 @@ class TestTradingServiceMock:
         mock_result.is_success = True
         trading_service.sdk.stock.cancel_order = Mock(return_value=mock_result)
 
-        result = trading_service.cancel_order({
-            "account": "1234567",
-            "order_no": "12345678"
-        })
+        result = trading_service.cancel_order({"account": "1234567", "order_no": "12345678"})
 
         assert result["status"] == "success"
         assert "取消成功" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_modify_price_success(self, mock_validate, trading_service):
         """測試改價成功"""
         # 模擬驗證成功
@@ -166,16 +164,12 @@ class TestTradingServiceMock:
         mock_result.is_success = True
         trading_service.sdk.stock.modify_price = Mock(return_value=mock_result)
 
-        result = trading_service.modify_price({
-            "account": "1234567",
-            "order_no": "12345678",
-            "new_price": 505.0
-        })
+        result = trading_service.modify_price({"account": "1234567", "order_no": "12345678", "new_price": 505.0})
 
         assert result["status"] == "success"
         assert "價格修改成功" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_modify_quantity_success(self, mock_validate, trading_service):
         """測試改量成功"""
         # 模擬驗證成功
@@ -187,16 +181,12 @@ class TestTradingServiceMock:
         mock_result.is_success = True
         trading_service.sdk.stock.modify_quantity = Mock(return_value=mock_result)
 
-        result = trading_service.modify_quantity({
-            "account": "1234567",
-            "order_no": "12345678",
-            "new_quantity": 500
-        })
+        result = trading_service.modify_quantity({"account": "1234567", "order_no": "12345678", "new_quantity": 500})
 
         assert result["status"] == "success"
         assert "數量修改成功" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_batch_place_order_success(self, mock_validate, trading_service):
         """測試批量下單成功"""
         # 模擬驗證成功
@@ -210,32 +200,18 @@ class TestTradingServiceMock:
         trading_service.sdk.stock.place_order = Mock(return_value=mock_result)
 
         orders = [
-            {
-                "account": "1234567",
-                "buy_sell": "Buy",
-                "symbol": "2330",
-                "price": "500.0",
-                "quantity": 1000
-            },
-            {
-                "account": "1234567",
-                "buy_sell": "Sell",
-                "symbol": "2454",
-                "price": "800.0",
-                "quantity": 500
-            }
+            {"account": "1234567", "buy_sell": "Buy", "symbol": "2330", "price": "500.0", "quantity": 1000},
+            {"account": "1234567", "buy_sell": "Sell", "symbol": "2454", "price": "800.0", "quantity": 500},
         ]
 
-        result = trading_service.batch_place_order({
-            "orders": orders
-        })
+        result = trading_service.batch_place_order({"orders": orders})
 
         assert result["status"] == "success"
         assert "results" in result["data"]
         assert len(result["data"]["results"]) == 2
         assert "批量下單完成" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_batch_place_order_partial_failure(self, mock_validate, trading_service):
         """測試批量下單部分失敗"""
         # 模擬驗證成功
@@ -252,27 +228,15 @@ class TestTradingServiceMock:
         mock_result_failure.message = "下單失敗"
 
         trading_service.sdk.place_order = Mock(side_effect=[mock_result_success, mock_result_failure])
+        # Also set stock.place_order to the same mock to support both sdk shapes
+        trading_service.sdk.stock.place_order = trading_service.sdk.place_order
 
         orders = [
-            {
-                "account": "1234567",
-                "buy_sell": "Buy",
-                "symbol": "2330",
-                "price": "500.0",
-                "quantity": 1000
-            },
-            {
-                "account": "1234567",
-                "buy_sell": "Sell",
-                "symbol": "2454",
-                "price": "800.0",
-                "quantity": 500
-            }
+            {"account": "1234567", "buy_sell": "Buy", "symbol": "2330", "price": "500.0", "quantity": 1000},
+            {"account": "1234567", "buy_sell": "Sell", "symbol": "2454", "price": "800.0", "quantity": 500},
         ]
 
-        result = trading_service.batch_place_order({
-            "orders": orders
-        })
+        result = trading_service.batch_place_order({"orders": orders})
 
         assert result["status"] == "success"
         assert "results" in result["data"]
@@ -281,7 +245,7 @@ class TestTradingServiceMock:
         assert result["data"]["results"][1]["status"] == "error"
         assert "批量下單完成" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_get_order_results_success(self, mock_validate, trading_service):
         """測試獲取委託結果成功"""
         # 模擬驗證成功
@@ -298,21 +262,19 @@ class TestTradingServiceMock:
                 "buy_sell": "Buy",
                 "quantity": 1000,
                 "price": 500.0,
-                "status": "Filled"
+                "status": "Filled",
             }
         ]
         trading_service.sdk.stock.get_order_results = Mock(return_value=mock_result)
 
-        result = trading_service.get_order_results({
-            "account": "1234567"
-        })
+        result = trading_service.get_order_results({"account": "1234567"})
 
         assert result["status"] == "success"
         assert isinstance(result["data"], list)
         assert len(result["data"]) == 1
         assert "成功獲取委託結果" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_get_order_results_detail_success(self, mock_validate, trading_service):
         """測試獲取委託結果詳細成功"""
         # 模擬驗證成功
@@ -330,21 +292,19 @@ class TestTradingServiceMock:
                 "quantity": 1000,
                 "price": 500.0,
                 "status": "Filled",
-                "details": []
+                "details": [],
             }
         ]
         trading_service.sdk.stock.get_order_results_detail = Mock(return_value=mock_result)
 
-        result = trading_service.get_order_results_detail({
-            "account": "1234567"
-        })
+        result = trading_service.get_order_results_detail({"account": "1234567"})
 
         assert result["status"] == "success"
         assert isinstance(result["data"], list)
         assert len(result["data"]) == 1
         assert "成功獲取委託結果詳細資訊" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_place_condition_order_success(self, mock_validate, trading_service):
         """測試下條件單成功"""
         # 模擬驗證成功
@@ -356,29 +316,25 @@ class TestTradingServiceMock:
         mock_result.is_success = True
         mock_result.data = {"condition_no": "COND001"}
         trading_service.sdk.place_condition_order = Mock(return_value=mock_result)
+        # Also set stock.place_condition_order to the same mock for compatibility
+        trading_service.sdk.stock.place_condition_order = trading_service.sdk.place_condition_order
 
-        result = trading_service.place_condition_order({
-            "account": "1234567",
-            "start_date": "2025-01-01",
-            "end_date": "2025-12-31",
-            "stop_sign": "Full",
-            "condition": {
-                "price": 500.0,
-                "operator": "GreaterThan"
-            },
-            "order": {
-                "buy_sell": "Buy",
-                "symbol": "2330",
-                "price": "500.0",
-                "quantity": 1000
+        result = trading_service.place_condition_order(
+            {
+                "account": "1234567",
+                "start_date": "2025-01-01",
+                "end_date": "2025-12-31",
+                "stop_sign": "Full",
+                "condition": {"price": 500.0, "operator": "GreaterThan"},
+                "order": {"buy_sell": "Buy", "symbol": "2330", "price": "500.0", "quantity": 1000},
             }
-        })
+        )
 
         assert result["status"] == "success"
         assert result["data"]["condition_no"] == "COND001"
         assert "條件單建立成功" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_cancel_condition_order_success(self, mock_validate, trading_service):
         """測試取消條件單成功"""
         # 模擬驗證成功
@@ -390,15 +346,12 @@ class TestTradingServiceMock:
         mock_result.is_success = True
         trading_service.sdk.stock.cancel_condition_order = Mock(return_value=mock_result)
 
-        result = trading_service.cancel_condition_order({
-            "account": "1234567",
-            "condition_no": "COND001"
-        })
+        result = trading_service.cancel_condition_order({"account": "1234567", "condition_no": "COND001"})
 
         assert result["status"] == "success"
         assert "取消成功" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_get_condition_order_success(self, mock_validate, trading_service):
         """測試查詢條件單成功"""
         # 模擬驗證成功
@@ -408,25 +361,17 @@ class TestTradingServiceMock:
         # 模擬 SDK 查詢條件單成功
         mock_result = Mock()
         mock_result.is_success = True
-        mock_result.data = [
-            {
-                "condition_no": "COND001",
-                "stock_no": "2330",
-                "status": "Active"
-            }
-        ]
+        mock_result.data = [{"condition_no": "COND001", "stock_no": "2330", "status": "Active"}]
         trading_service.sdk.stock.get_condition_order = Mock(return_value=mock_result)
 
-        result = trading_service.get_condition_order({
-            "account": "1234567"
-        })
+        result = trading_service.get_condition_order({"account": "1234567"})
 
         assert result["status"] == "success"
         assert isinstance(result["data"], list)
         assert len(result["data"]) == 1
         assert "成功獲取條件單清單" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_get_trail_order_success(self, mock_validate, trading_service):
         """測試查詢移動鎖利單成功"""
         # 模擬驗證成功
@@ -436,25 +381,17 @@ class TestTradingServiceMock:
         # 模擬 SDK 查詢移動鎖利單成功
         mock_result = Mock()
         mock_result.is_success = True
-        mock_result.data = [
-            {
-                "trail_no": "TRAIL001",
-                "stock_no": "2330",
-                "status": "Active"
-            }
-        ]
+        mock_result.data = [{"trail_no": "TRAIL001", "stock_no": "2330", "status": "Active"}]
         trading_service.sdk.stock.get_trail_order = Mock(return_value=mock_result)
 
-        result = trading_service.get_trail_order({
-            "account": "1234567"
-        })
+        result = trading_service.get_trail_order({"account": "1234567"})
 
         assert result["status"] == "success"
         assert isinstance(result["data"], list)
         assert len(result["data"]) == 1
         assert "成功獲取移動鎖利單清單" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_place_trail_profit_success(self, mock_validate, trading_service):
         """測試移動鎖利條件單建立成功"""
         # 模擬驗證成功
@@ -468,30 +405,32 @@ class TestTradingServiceMock:
         mock_result.data.guid = "TRAIL_GUID_001"
         trading_service.sdk.stock.trail_profit = Mock(return_value=mock_result)
 
-        result = trading_service.place_trail_profit({
-            "account": "1234567",
-            "start_date": "20241106",
-            "end_date": "20241107",
-            "stop_sign": "Full",
-            "trail": {
-                "symbol": "2330",
-                "price": "850.00",
-                "direction": "Up",
-                "percentage": 5,
-                "buysell": "Buy",
-                "quantity": 1000,
-                "price_type": "MatchedPrice",
-                "diff": 5,
-                "time_in_force": "ROD",
-                "order_type": "Stock"
+        result = trading_service.place_trail_profit(
+            {
+                "account": "1234567",
+                "start_date": "20241106",
+                "end_date": "20241107",
+                "stop_sign": "Full",
+                "trail": {
+                    "symbol": "2330",
+                    "price": "850.00",
+                    "direction": "Up",
+                    "percentage": 5,
+                    "buysell": "Buy",
+                    "quantity": 1000,
+                    "price_type": "MatchedPrice",
+                    "diff": 5,
+                    "time_in_force": "ROD",
+                    "order_type": "Stock",
+                },
             }
-        })
+        )
 
         assert result["status"] == "success"
         assert result["data"]["guid"] == "TRAIL_GUID_001"
         assert "移動鎖利條件單已建立" in result["message"]
 
-    @patch('fubon_api_mcp_server.trading_service.validate_and_get_account')
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_get_time_slice_order_success(self, mock_validate, trading_service):
         """測試分時分量查詢成功"""
         # 模擬驗證成功
@@ -501,19 +440,10 @@ class TestTradingServiceMock:
         # 模擬 SDK 查詢分時分量成功
         mock_result = Mock()
         mock_result.is_success = True
-        mock_result.data = [
-            {
-                "batch_no": "BATCH001",
-                "symbol": "2330",
-                "status": "Active"
-            }
-        ]
+        mock_result.data = [{"batch_no": "BATCH001", "symbol": "2330", "status": "Active"}]
         trading_service.sdk.stock.get_time_slice_order = Mock(return_value=mock_result)
 
-        result = trading_service.get_time_slice_order({
-            "account": "1234567",
-            "batch_no": "BATCH001"
-        })
+        result = trading_service.get_time_slice_order({"account": "1234567", "batch_no": "BATCH001"})
 
         assert result["status"] == "success"
         assert isinstance(result["data"], list)
