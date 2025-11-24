@@ -52,6 +52,250 @@ class AnalysisService:
         self.mcp.tool()(self.calculate_performance_attribution)
         self.mcp.tool()(self.detect_arbitrage_opportunities)
         self.mcp.tool()(self.generate_market_sentiment_index)
+        self.mcp.tool()(self.analyze_stock)
+
+    def analyze_stock(self, args: Dict) -> dict:
+        """
+        對指定股票進行全方位技術分析並生成交易計畫
+
+        整合多種技術指標 (MA, BB, RSI, MACD, KD, ATR) 進行綜合評估，
+        判斷市場趨勢 (多/空/盤整)，識別支撐壓力位，並生成具體的交易計畫 (進場/停損/停利)。
+
+        Args:
+            symbol (str): 股票代碼
+            account (str, optional): 帳戶號碼 (用於獲取庫存資訊作為參考)
+
+        Returns:
+            dict: 分析報告，包含趨勢判斷、指標訊號、支撐壓力、交易計畫
+        """
+        try:
+            validated_args = AnalyzeStockArgs(**args)
+            symbol = validated_args.symbol
+            account = validated_args.account
+
+            # 1. 獲取歷史數據
+            df = self._read_local_stock_data(symbol)
+
+            # 如果本地沒有數據或數據太舊，嘗試從 API 獲取
+            if df is None or df.empty or (datetime.datetime.now() - df["date"].max()).days > 3:
+                if self.reststock:
+                    # 獲取最近 365 天數據
+                    end_date = datetime.datetime.now()
+                    start_date = end_date - datetime.timedelta(days=365)
+
+                    try:
+                        params = {
+                            "symbol": symbol,
+                            "from": start_date.strftime("%Y-%m-%d"),
+                            "to": end_date.strftime("%Y-%m-%d"),
+                        }
+                        response = self.reststock.historical.candles(**params)
+                        
+                        # 處理 SDK 回應
+                        api_data = None
+                        if hasattr(response, "is_success") and response.is_success:
+                            api_data = response.data if hasattr(response, "data") else getattr(response, "result", None)
+                        elif isinstance(response, dict) and "data" in response:
+                            api_data = response["data"]
+                            
+                        if api_data:
+                            df = pd.DataFrame(api_data)
+                            df["date"] = pd.to_datetime(df["date"])
+                            df = df.sort_values(by="date", ascending=False)
+                            # 簡單處理，不保存到 DB (避免重複邏輯)，直接使用
+                            df["vol_value"] = df["close"] * df["volume"]
+                            df["price_change"] = df["close"] - df["open"]
+                            df["change_ratio"] = (df["price_change"] / df["open"]) * 100
+                    except Exception as e:
+                        self.logger.warning(f"嘗試從 API 獲取數據失敗: {e}")
+
+            if df is None or df.empty or len(df) < 60:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "message": f"數據不足，無法進行有效分析 (需要至少 60 筆歷史數據)。請先使用 market_data_service 更新 {symbol} 的歷史數據。",
+                }
+
+            # 確保數據按日期升序排列以進行指標計算
+            df_calc = df.sort_values("date", ascending=True).copy()
+
+            close = df_calc["close"]
+            high = df_calc["high"]
+            low = df_calc["low"]
+            volume = df_calc["volume"]
+
+            # 2. 計算技術指標
+            # 均線
+            ma5 = indicators.calculate_sma(close, 5)
+            ma10 = indicators.calculate_sma(close, 10)
+            ma20 = indicators.calculate_sma(close, 20)
+            ma60 = indicators.calculate_sma(close, 60)
+
+            # 布林通道
+            bb = indicators.calculate_bollinger_bands(close)
+
+            # 動量指標
+            rsi = indicators.calculate_rsi(close)
+            macd = indicators.calculate_macd(close)
+            kd = indicators.calculate_kd(high, low, close)
+
+            # 波動率
+            atr = indicators.calculate_atr(high, low, close)
+
+            # 3. 綜合分析
+            current_price = close.iloc[-1]
+            prev_price = close.iloc[-2]
+
+            # 趨勢判斷
+            trend_score = 0
+            trend_signals = []
+
+            # 均線排列
+            if ma5.iloc[-1] > ma20.iloc[-1] > ma60.iloc[-1]:
+                trend_score += 2
+                trend_signals.append("均線多頭排列")
+            elif ma5.iloc[-1] < ma20.iloc[-1] < ma60.iloc[-1]:
+                trend_score -= 2
+                trend_signals.append("均線空頭排列")
+
+            # 價格與均線關係
+            if current_price > ma20.iloc[-1]:
+                trend_score += 1
+            else:
+                trend_score -= 1
+
+            # MACD
+            if macd["histogram"].iloc[-1] > 0:
+                trend_score += 1
+                if macd["histogram"].iloc[-1] > macd["histogram"].iloc[-2]:
+                    trend_signals.append("MACD柱狀圖增長")
+            else:
+                trend_score -= 1
+
+            # 判斷趨勢
+            if trend_score >= 3:
+                trend = "強勢多頭"
+            elif trend_score >= 1:
+                trend = "偏多震盪"
+            elif trend_score <= -3:
+                trend = "強勢空頭"
+            elif trend_score <= -1:
+                trend = "偏空震盪"
+            else:
+                trend = "盤整"
+
+            # 4. 支撐與壓力
+            # 簡單使用近期高低點和布林通道
+            recent_high = high.tail(20).max()
+            recent_low = low.tail(20).min()
+
+            resistance = min(recent_high, bb["upper"].iloc[-1])
+            support = max(recent_low, bb["lower"].iloc[-1])
+
+            # 5. 交易訊號與計畫
+            signal = "觀望"
+            confidence = "低"
+            plan = {}
+
+            # 多頭訊號
+            bullish_conditions = 0
+            if rsi.iloc[-1] < 30:
+                bullish_conditions += 1  # 超賣
+            if kd["k"].iloc[-1] < 20 and kd["k"].iloc[-1] > kd["d"].iloc[-1]:
+                bullish_conditions += 1  # 低檔金叉
+            if current_price > ma20.iloc[-1] and prev_price <= ma20.iloc[-2]:
+                bullish_conditions += 1  # 突破月線
+            if current_price < bb["lower"].iloc[-1]:
+                bullish_conditions += 1  # 跌破下軌 (乖離過大)
+
+            # 空頭訊號
+            bearish_conditions = 0
+            if rsi.iloc[-1] > 70:
+                bearish_conditions += 1  # 超買
+            if kd["k"].iloc[-1] > 80 and kd["k"].iloc[-1] < kd["d"].iloc[-1]:
+                bearish_conditions += 1  # 高檔死叉
+            if current_price < ma20.iloc[-1] and prev_price >= ma20.iloc[-2]:
+                bearish_conditions += 1  # 跌破月線
+            if current_price > bb["upper"].iloc[-1]:
+                bearish_conditions += 1  # 突破上軌 (乖離過大)
+
+            if bullish_conditions >= 2:
+                signal = "買進"
+                confidence = "高" if trend_score >= 0 else "中"
+
+                # 交易計畫
+                entry_price = current_price
+                stop_loss = support * 0.98  # 支撐下方 2%
+                take_profit = current_price + (current_price - stop_loss) * 2  # 風報比 1:2
+
+                plan = {
+                    "action": "Buy",
+                    "entry_range": [current_price * 0.99, current_price * 1.01],
+                    "stop_loss": stop_loss,
+                    "take_profit": take_profit,
+                    "risk_reward_ratio": 2.0,
+                }
+
+            elif bearish_conditions >= 2:
+                signal = "賣出"
+                confidence = "高" if trend_score <= 0 else "中"
+
+                # 交易計畫
+                entry_price = current_price
+                stop_loss = resistance * 1.02  # 壓力上方 2%
+                take_profit = current_price - (stop_loss - current_price) * 2  # 風報比 1:2
+
+                plan = {
+                    "action": "Sell",
+                    "entry_range": [current_price * 0.99, current_price * 1.01],
+                    "stop_loss": stop_loss,
+                    "take_profit": take_profit,
+                    "risk_reward_ratio": 2.0,
+                }
+
+            return {
+                "status": "success",
+                "data": {
+                    "symbol": symbol,
+                    "date": df_calc["date"].iloc[-1].strftime("%Y-%m-%d"),
+                    "price": {
+                        "current": float(current_price),
+                        "change": float(df_calc["price_change"].iloc[-1]),
+                        "change_percent": float(df_calc["change_ratio"].iloc[-1]),
+                    },
+                    "trend": {
+                        "direction": trend,
+                        "score": trend_score,
+                        "signals": trend_signals,
+                    },
+                    "indicators": {
+                        "rsi": float(rsi.iloc[-1]),
+                        "macd": float(macd["histogram"].iloc[-1]),
+                        "kd_k": float(kd["k"].iloc[-1]),
+                        "kd_d": float(kd["d"].iloc[-1]),
+                        "ma20": float(ma20.iloc[-1]),
+                        "atr": float(atr.iloc[-1]),
+                    },
+                    "levels": {
+                        "support": float(support),
+                        "resistance": float(resistance),
+                    },
+                    "analysis": {
+                        "signal": signal,
+                        "confidence": confidence,
+                        "plan": plan,
+                    },
+                },
+                "message": f"完成 {symbol} 技術分析: {trend}，建議 {signal}",
+            }
+
+        except Exception as e:
+            self.logger.exception(f"分析股票失敗: {str(e)}")
+            return {
+                "status": "error",
+                "data": None,
+                "message": f"分析股票失敗: {str(e)}",
+            }
 
     def calculate_portfolio_var(self, args: Dict) -> dict:
         """
@@ -1104,6 +1348,13 @@ class AnalysisService:
 
 
 # 參數模型定義
+class AnalyzeStockArgs(BaseModel):
+    """股票分析參數模型"""
+
+    symbol: str
+    account: Optional[str] = None  # 用於獲取庫存資訊作為參考
+
+
 class CalculatePortfolioVaRArgs(BaseModel):
     """投資組合VaR計算參數模型"""
 

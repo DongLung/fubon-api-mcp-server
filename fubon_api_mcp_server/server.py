@@ -1651,13 +1651,13 @@ def options_strategy_optimizer(symbol: str, market_view: str = "neutral") -> str
 
     view_desc = view_descriptions.get(market_view, "市場觀點")
 
-    return f"""請為{symbol}提供基於{view_desc}的選擇權策略優化建議：
+    return f"""請提供{symbol}的選擇權策略優化建議，基於{view_desc}：
 
 1. **市場環境分析**
    - 使用 get_trading_signals 工具分析{symbol}技術指標
    - 評估當前波動率環境
    - 分析選擇權隱含波動率
-   - 評估市場對{symbol}的預期
+   - 評估市場對未來波動的預期
 
 2. **策略適配性分析**
    - 根據{view_desc}推薦適合策略
@@ -2367,7 +2367,9 @@ def main():
         )
         account_service = AccountService(mcp, config.sdk, config.accounts)
         reports_service = ReportsService(mcp, config.sdk, config.accounts)
-        indicators_service = AnalysisService(mcp, config.sdk, config.accounts)
+        indicators_service = AnalysisService(
+            mcp, config.sdk, config.accounts, config.reststock, config.restfutopt
+        )
         streaming_service = StreamingService(mcp, server_state)
 
         logger.info("富邦證券MCP server運行中...")

@@ -354,6 +354,188 @@ class TestAnalysisServiceMock:
             result = analysis_service._read_local_stock_data("2330")
             assert result is None
 
+    def test_analyze_stock_success(self, analysis_service):
+        """測試股票分析 - 成功"""
+        # Create sample data (100 days)
+        dates = pd.date_range(end=pd.Timestamp.now(), periods=100)
+        # Make close price trend up to trigger bullish signal
+        close_prices = np.linspace(100, 150, 100) + np.random.randn(100)
+
+        data = {
+            "date": dates,
+            "open": close_prices - 1,
+            "high": close_prices + 2,
+            "low": close_prices - 2,
+            "close": close_prices,
+            "volume": np.random.randint(1000, 10000, 100),
+            "price_change": np.random.randn(100),
+            "change_ratio": np.random.randn(100),
+        }
+        df = pd.DataFrame(data)
+
+        with patch.object(analysis_service, "_read_local_stock_data", return_value=df):
+            result = analysis_service.analyze_stock({"symbol": "2330"})
+
+        assert result["status"] == "success"
+        assert "trend" in result["data"]
+        assert "analysis" in result["data"]
+        assert "plan" in result["data"]["analysis"]
+        # Check if indicators are calculated
+        assert "rsi" in result["data"]["indicators"]
+        assert "macd" in result["data"]["indicators"]
+
+    def test_analyze_stock_insufficient_data(self, analysis_service):
+        """測試股票分析 - 數據不足"""
+        # Create sample data (only 10 days)
+        dates = pd.date_range(end=pd.Timestamp.now(), periods=10)
+        data = {
+            "date": dates,
+            "close": np.random.randn(10) + 100,
+            "high": np.random.randn(10) + 105,
+            "low": np.random.randn(10) + 95,
+            "volume": np.random.randint(1000, 10000, 10),
+            "price_change": np.random.randn(10),
+            "change_ratio": np.random.randn(10),
+        }
+        df = pd.DataFrame(data)
+
+        with patch.object(analysis_service, "_read_local_stock_data", return_value=df):
+            # Mock reststock to be None so it doesn't try to fetch
+            analysis_service.reststock = None
+            result = analysis_service.analyze_stock({"symbol": "2330"})
+
+        assert result["status"] == "error"
+        assert "數據不足" in result["message"]
+
+    @patch("fubon_api_mcp_server.analysis_service.validate_and_get_account")
+    def test_calculate_portfolio_var_no_portfolio_data(self, mock_validate, analysis_service):
+        """測試計算VaR - 無投資組合數據"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        with patch.object(analysis_service, "_get_portfolio_data", return_value=None):
+            result = analysis_service.calculate_portfolio_var({"account": "1234567"})
+
+        assert result["status"] == "error"
+        assert "無法獲取投資組合數據" in result["message"]
+
+    @patch("fubon_api_mcp_server.analysis_service.validate_and_get_account")
+    def test_run_portfolio_stress_test_no_portfolio_data(self, mock_validate, analysis_service):
+        """測試壓力測試 - 無投資組合數據"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        with patch.object(analysis_service, "_get_portfolio_data", return_value=None):
+            result = analysis_service.run_portfolio_stress_test({"account": "1234567", "scenarios": [{"name": "test"}]})
+
+        assert result["status"] == "error"
+        assert "無法獲取投資組合數據" in result["message"]
+
+    def test_calculate_portfolio_volatility_empty_positions(self, analysis_service):
+        """測試計算投資組合波動率 - 空持倉"""
+        volatility = analysis_service._calculate_portfolio_volatility([])
+        assert volatility == 0.15  # 默認波動率
+
+    def test_calculate_portfolio_volatility_with_data(self, analysis_service):
+        """測試計算投資組合波動率 - 有數據"""
+        positions = [{"stock_no": "2330", "market_value": 100000}]
+
+        mock_df = pd.DataFrame({"close": [100, 101, 102, 103, 104] * 5})  # 25個數據點
+
+        with patch.object(analysis_service, "_read_local_stock_data", return_value=mock_df):
+            volatility = analysis_service._calculate_portfolio_volatility(positions, 1)
+            assert isinstance(volatility, float)
+            assert volatility >= 0.05  # 最小波動率
+
+    def test_calculate_market_crash_sensitivity_no_data(self, analysis_service):
+        """測試計算市場崩盤敏感度 - 無數據"""
+        with patch.object(analysis_service, "_read_local_stock_data", return_value=None):
+            sensitivity = analysis_service._calculate_market_crash_sensitivity("2330")
+            assert sensitivity == 1.0  # 默認敏感度
+
+    def test_calculate_rate_sensitivity_no_data(self, analysis_service):
+        """測試計算利率敏感度 - 無數據"""
+        with patch.object(analysis_service, "_read_local_stock_data", return_value=None):
+            sensitivity = analysis_service._calculate_rate_sensitivity("2330")
+            assert sensitivity == 0.8  # 默認敏感度
+
+    def test_read_local_stock_data_success(self, analysis_service):
+        """測試讀取本地股票數據 - 成功"""
+        mock_df = pd.DataFrame({"symbol": ["2330"], "date": ["2024-01-01"], "close": [100]})
+
+        with patch("sqlite3.connect") as mock_connect:
+            mock_conn = Mock()
+            mock_connect.return_value.__enter__.return_value = mock_conn
+            mock_connect.return_value.__exit__.return_value = None
+
+            with patch("fubon_api_mcp_server.analysis_service.pd.read_sql_query", return_value=mock_df):
+                with patch("fubon_api_mcp_server.analysis_service.pd.to_datetime") as mock_to_datetime:
+                    mock_to_datetime.return_value = pd.to_datetime(["2024-01-01"])
+                    result = analysis_service._read_local_stock_data("2330")
+
+        assert result is not None
+        assert len(result) == 1
+
+    def test_read_local_stock_data_error(self, analysis_service):
+        """測試讀取本地股票數據 - 錯誤"""
+        with patch("sqlite3.connect") as mock_connect:
+            mock_connect.side_effect = Exception("Database error")
+            result = analysis_service._read_local_stock_data("2330")
+            assert result is None
+
+    def test_analyze_stock_success(self, analysis_service):
+        """測試股票分析 - 成功"""
+        # Create sample data (100 days)
+        dates = pd.date_range(end=pd.Timestamp.now(), periods=100)
+        # Make close price trend up to trigger bullish signal
+        close_prices = np.linspace(100, 150, 100) + np.random.randn(100)
+
+        data = {
+            "date": dates,
+            "open": close_prices - 1,
+            "high": close_prices + 2,
+            "low": close_prices - 2,
+            "close": close_prices,
+            "volume": np.random.randint(1000, 10000, 100),
+            "price_change": np.random.randn(100),
+            "change_ratio": np.random.randn(100),
+        }
+        df = pd.DataFrame(data)
+
+        with patch.object(analysis_service, "_read_local_stock_data", return_value=df):
+            result = analysis_service.analyze_stock({"symbol": "2330"})
+
+        assert result["status"] == "success"
+        assert "trend" in result["data"]
+        assert "analysis" in result["data"]
+        assert "plan" in result["data"]["analysis"]
+        # Check if indicators are calculated
+        assert "rsi" in result["data"]["indicators"]
+        assert "macd" in result["data"]["indicators"]
+
+    def test_analyze_stock_insufficient_data(self, analysis_service):
+        """測試股票分析 - 數據不足"""
+        # Create sample data (only 10 days)
+        dates = pd.date_range(end=pd.Timestamp.now(), periods=10)
+        data = {
+            "date": dates,
+            "close": np.random.randn(10) + 100,
+            "high": np.random.randn(10) + 105,
+            "low": np.random.randn(10) + 95,
+            "volume": np.random.randint(1000, 10000, 10),
+            "price_change": np.random.randn(10),
+            "change_ratio": np.random.randn(10),
+        }
+        df = pd.DataFrame(data)
+
+        with patch.object(analysis_service, "_read_local_stock_data", return_value=df):
+            # Mock reststock to be None so it doesn't try to fetch
+            analysis_service.reststock = None
+            result = analysis_service.analyze_stock({"symbol": "2330"})
+
+        assert result["status"] == "error"
+        assert "數據不足" in result["message"]
+
 
 class TestAnalysisServiceIntegration:
     """整合測試 - 使用真實 API（需要環境變數）"""

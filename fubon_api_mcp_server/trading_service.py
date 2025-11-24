@@ -31,13 +31,16 @@ from fubon_neo.constant import (
     TrailOrder,
     TriggerContent,
 )
-from fubon_neo.sdk import Condition, ConditionDayTrade, ConditionOrder, FubonSDK
+from fubon_neo.sdk import Condition, ConditionDayTrade, ConditionOrder, FubonSDK, Order
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 
 # 本地模組導入
 from .enums import (
     to_bs_action,
+    to_market_type,
+    to_order_type,
+    to_price_type,
     to_condition_market_type,
     to_condition_order_type,
     to_condition_price_type,
@@ -94,7 +97,28 @@ class TradingService:
                 "status",
                 "date",
                 "stock_no",
+                "order_no",
                 "order_type",
+                "function_type",
+                "seq_no",
+                "asset_type",
+                "market",
+                "market_type",
+                "price_type",
+                "price",
+                "quantity",
+                "time_in_force",
+                "is_pre_order",
+                "after_price_type",
+                "after_price",
+                "unit",
+                "after_qty",
+                "filled_money",
+                "before_qty",
+                "before_price",
+                "user_def",
+                "last_time",
+                "error_message",
                 "lastday_qty",
                 "buy_qty",
                 "buy_filled_qty",
@@ -145,6 +169,55 @@ class TradingService:
             if result:
                 return result
             return str(obj)
+
+    def _normalize_order_result(self, raw_obj):
+        """
+        Normalize an OrderResult (SDK object or dict) into a clean dict with primitive types.
+        This normalizes enum-like values (e.g., 'BSAction.Buy' -> 'Buy') and normalizes
+        order details' keys.
+        """
+        # Convert using existing _to_dict when possible
+        data = self._to_dict(raw_obj)
+
+        # Helper to strip enum prefixes like 'BSAction.Buy' -> 'Buy'
+        def strip_enum_prefix(val):
+            if isinstance(val, str) and "." in val:
+                return val.split(".")[-1]
+            return val
+
+        # Normalize top-level enum-like fields
+        enum_keys = [
+            "buy_sell",
+            "order_type",
+            "price_type",
+            "after_price_type",
+            "market_type",
+            "unit",
+        ]
+        for k in enum_keys:
+            if k in data:
+                data[k] = strip_enum_prefix(data[k])
+
+        # Normalize details array
+        details = data.get("details") or []
+        normalized_details = []
+        for d in details:
+            # if detail is object, convert
+            det = self._to_dict(d) if not isinstance(d, dict) else d.copy()
+            # standardize keys: prefer 'err_msg' or 'error_message'
+            if "error_message" in det:
+                det["err_msg"] = det.pop("error_message")
+            if "modified_time" not in det and "last_time" in det:
+                det["modified_time"] = det.pop("last_time")
+            # Strip enum prefixes in detail status or function_type strings
+            if "status" in det:
+                det["status"] = strip_enum_prefix(det["status"]) if isinstance(det["status"], str) else det["status"]
+            if "function_type" in det:
+                det["function_type"] = strip_enum_prefix(det["function_type"]) if isinstance(det["function_type"], str) else det["function_type"]
+            normalized_details.append(det)
+
+        data["details"] = normalized_details
+        return data
 
     def _stock_client(self):
         """Return the stock client if present, otherwise the top-level SDK (for backward compatibility with tests)."""
@@ -219,6 +292,8 @@ class TradingService:
 
         # 委託結果和回報工具
         self.mcp.tool()(self.get_order_results)
+        self.mcp.tool()(self.get_order_history)
+        self.mcp.tool()(self.get_filled_history)
         self.mcp.tool()(self.get_order_results_detail)
         self.mcp.tool()(self.get_trail_history)
         self.mcp.tool()(self.get_condition_history)
@@ -244,28 +319,38 @@ class TradingService:
             if error:
                 return {"status": "error", "data": None, "message": error}
 
-            # 構建委託單參數
-            order_params = {
-                "account": account_obj,
-                "buy_sell": validated_args.buy_sell,
-                "symbol": validated_args.symbol,
-                "price": validated_args.price,
-                "quantity": validated_args.quantity,
-                "market_type": validated_args.market_type,
-                "price_type": validated_args.price_type,
-                "time_in_force": validated_args.time_in_force,
-                "order_type": validated_args.order_type,
-            }
+            # 構建委託單物件（Order）並呼叫 SDK
+            price_val = validated_args.price if validated_args.price is not None else None
 
-            # 調用 SDK 下單
+            # 當 price_type 為 Market, LimitUp, LimitDown 時，price 應為空
+            if validated_args.price_type in ["Market", "LimitUp", "LimitDown"]:
+                price_val = None
+
+            order_obj = Order(
+                buy_sell=to_bs_action(validated_args.buy_sell),
+                symbol=validated_args.symbol,
+                price=price_val,
+                quantity=validated_args.quantity,
+                market_type=to_market_type(validated_args.market_type),
+                price_type=to_price_type(validated_args.price_type),
+                time_in_force=to_time_in_force(validated_args.time_in_force),
+                order_type=to_order_type(validated_args.order_type),
+            )
+
+            # 調用 SDK 下單 (account, OrderObject)
             stock_client = self._stock_client_for("place_order")
-            result = stock_client.place_order(**order_params)
+            try:
+                result = stock_client.place_order(account=account_obj, order=order_obj)
+            except TypeError:
+                # fallback to positional arguments
+                result = stock_client.place_order(account_obj, order_obj)
 
             if result and hasattr(result, "is_success") and result.is_success:
+                order_no = getattr(result.data, 'order_no', 'N/A') if hasattr(result, 'data') else 'N/A'
                 return {
                     "status": "success",
                     "data": self._to_dict(result.data),
-                    "message": f"委託單下單成功，委託單號: {result.data.get('order_no', 'N/A')}",
+                    "message": f"委託單下單成功，委託單號: {order_no}",
                 }
             else:
                 error_msg = "下單失敗"
@@ -294,9 +379,57 @@ class TradingService:
             if error:
                 return {"status": "error", "data": None, "message": error}
 
-            # 調用 SDK 取消委託
+            # 調用 SDK 取消委託，支援 order_res or order_no
             stock_client = self._stock_client_for("cancel_order")
-            result = stock_client.cancel_order(account=account_obj, order_no=validated_args.order_no)
+            result = None
+
+            # 使用 order_res 模式
+            if validated_args.order_res is not None:
+                cancel_obj = validated_args.order_res
+                try:
+                    # 優先嘗試命名參數
+                    result = stock_client.cancel_order(account=account_obj, cancel_order=cancel_obj, unblock=validated_args.unblock)
+                except TypeError:
+                    try:
+                        # positional: (account, cancel_obj, unblock)
+                        result = stock_client.cancel_order(account_obj, cancel_obj, validated_args.unblock)
+                    except TypeError:
+                        # fallback: (account, cancel_obj)
+                        result = stock_client.cancel_order(account_obj, cancel_obj)
+            else:
+                # 使用 order_no 模式 - 需先查詢委託單
+                if not validated_args.order_no:
+                    return {"status": "error", "data": None, "message": "缺少 order_no 或 order_res"}
+
+                # 查詢委託單
+                get_res_client = self._stock_client_for("get_order_results")
+                result_order_res = None
+                try:
+                    result_order_res = get_res_client.get_order_results(account=account_obj)
+                except Exception:
+                    pass
+
+                target_order = None
+                if result_order_res and hasattr(result_order_res, "is_success") and result_order_res.is_success:
+                    order_list = getattr(result_order_res, "data", []) or []
+                    for item in order_list:
+                        # 為了比對 order_no，先轉 dict 取值，但保留原始 item 傳給 SDK
+                        itm = item if isinstance(item, dict) else self._to_dict(item)
+                        if itm.get("order_no") == validated_args.order_no:
+                            target_order = item
+                            break
+                
+                if target_order is None:
+                    return {"status": "error", "data": None, "message": f"找不到委託單 {validated_args.order_no}，無法取消"}
+
+                cancel_obj = target_order
+                try:
+                    result = stock_client.cancel_order(account=account_obj, cancel_order=cancel_obj, unblock=validated_args.unblock)
+                except TypeError:
+                    try:
+                        result = stock_client.cancel_order(account_obj, cancel_obj, validated_args.unblock)
+                    except TypeError:
+                        result = stock_client.cancel_order(account_obj, cancel_obj)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
@@ -332,19 +465,83 @@ class TradingService:
             if error:
                 return {"status": "error", "data": None, "message": error}
 
-            # 調用 SDK 修改價格
+            # 檢查 price 與 price_type 互斥
+            if validated_args.new_price is not None and validated_args.price_type is not None:
+                return {"status": "error", "data": None, "message": "請僅提供 new_price 或 price_type 其中一個參數"}
+
             stock_client = self._stock_client_for("modify_price")
-            result = stock_client.modify_price(
-                account=account_obj,
-                order_no=validated_args.order_no,
-                new_price=validated_args.new_price,
-            )
+
+            # 建立 ModifyPriceObj（如果使用者直接傳入 order_res，我們就直接使用）
+            modify_obj = None
+            if validated_args.order_res is not None:
+                modify_obj = validated_args.order_res
+            else:
+                # 若使用者未傳入 order_res，需使用 order_no 查詢原始委託單，再呼叫 SDK.make_modify_price_obj
+                if not validated_args.order_no:
+                    return {"status": "error", "data": None, "message": "缺少 order_no 或 order_res"}
+
+                # 取得委託單明細
+                get_res_client = self._stock_client_for("get_order_results")
+                result_order_res = None
+                try:
+                    result_order_res = get_res_client.get_order_results(account=account_obj)
+                except Exception:
+                    result_order_res = None
+
+                target_order = None
+                if result_order_res and hasattr(result_order_res, "is_success") and result_order_res.is_success:
+                    order_list = getattr(result_order_res, "data", []) or []
+                    for item in order_list:
+                        # item 可能是 dict 或物件
+                        itm = item if isinstance(item, dict) else self._to_dict(item)
+                        if itm.get("order_no") == validated_args.order_no:
+                            target_order = item
+                            break
+                if target_order is None:
+                    return {"status": "error", "data": None, "message": "找不到對應的委託單(order_no)"}
+
+                # 建立 make_modify_price_obj
+                price_arg = None
+                if validated_args.new_price is not None:
+                    price_arg = str(validated_args.new_price)
+
+                try:
+                    if hasattr(stock_client, "make_modify_price_obj"):
+                        modify_obj = stock_client.make_modify_price_obj(target_order, price_arg)
+                        # 如果傳入的是 price_type，嘗試手動設定欄位
+                        if validated_args.price_type is not None:
+                            try:
+                                if isinstance(modify_obj, dict):
+                                    modify_obj["price_type"] = validated_args.price_type
+                                else:
+                                    setattr(modify_obj, "price_type", validated_args.price_type)
+                            except Exception:
+                                pass
+                    else:
+                        # SDK 無 make_modify_price_obj 的情況，回退為直接組 dict
+                        if price_arg is not None:
+                            modify_obj = {"order_no": validated_args.order_no, "after_price": price_arg}
+                        else:
+                            modify_obj = {"order_no": validated_args.order_no, "after_price_type": validated_args.price_type}
+                except Exception as e:
+                    return {"status": "error", "data": None, "message": f"建立修改價格物件失敗: {str(e)}"}
+
+            # 呼叫 SDK.modify_price
+            try:
+                if isinstance(modify_obj, dict):
+                    result = stock_client.modify_price(account=account_obj, modify_price_obj=modify_obj, unblock=validated_args.unblock)
+                else:
+                    result = stock_client.modify_price(account=account_obj, modify_price_obj=modify_obj, unblock=validated_args.unblock)
+            except TypeError:
+                # fallback: named args only
+                result = stock_client.modify_price(account=account_obj, modify_price_obj=modify_obj)
 
             if result and hasattr(result, "is_success") and result.is_success:
+                desc = validated_args.order_no or (getattr(result.data, "order_no", None) if hasattr(result, "data") else None)
                 return {
                     "status": "success",
                     "data": self._to_dict(result.data),
-                    "message": f"委託單 {validated_args.order_no} 價格修改成功",
+                    "message": f"委託單 {desc or ''} 價格修改成功",
                 }
             else:
                 error_msg = "修改價格失敗"
@@ -475,22 +672,28 @@ class TradingService:
             if error:
                 return {"status": "error", "data": None, "symbol": order.get("symbol"), "message": error}
 
-            # 構建委託參數
-            order_params = {
-                "account": account_obj,
-                "buy_sell": order["buy_sell"],
-                "symbol": order["symbol"],
-                "price": order["price"],
-                "quantity": order["quantity"],
-                "market_type": order.get("market_type", "Common"),
-                "price_type": order.get("price_type", "Limit"),
-                "time_in_force": order.get("time_in_force", "ROD"),
-                "order_type": order.get("order_type", "Stock"),
-            }
+            # 構建委託物件（Order）並呼叫 SDK
+            price_val = order["price"]
+            price_type_str = order.get("price_type", "Limit")
 
-            # 調用 SDK 下單
+            # 當 price_type 為 Market, LimitUp, LimitDown 時，price 應為空
+            if price_type_str in ["Market", "LimitUp", "LimitDown"]:
+                price_val = None
+
+            order_obj = Order(
+                buy_sell=to_bs_action(order["buy_sell"]),
+                symbol=order["symbol"],
+                price=price_val,
+                quantity=order["quantity"],
+                market_type=to_market_type(order.get("market_type", "Common")),
+                price_type=to_price_type(price_type_str),
+                time_in_force=to_time_in_force(order.get("time_in_force", "ROD")),
+                order_type=to_order_type(order.get("order_type", "Stock")),
+            )
+
+            # 調用 SDK 下單 (account, OrderObject)
             stock_client = self._stock_client_for("place_order")
-            result = stock_client.place_order(**order_params)
+            result = stock_client.place_order(account_obj, order_obj)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
@@ -625,6 +828,11 @@ class TradingService:
             if error:
                 return {"status": "error", "data": None, "message": error}
 
+            # 處理 price_type
+            order_params = validated_args.order.copy()
+            if order_params.get("price_type") in ["Market", "LimitUp", "LimitDown"]:
+                order_params["price"] = ""
+
             # 構建條件單參數
             condition_params = {
                 "account": account_obj,
@@ -632,7 +840,7 @@ class TradingService:
                 "end_date": validated_args.end_date,
                 "stop_sign": validated_args.stop_sign,
                 "condition": validated_args.condition,
-                "order": validated_args.order,
+                "order": order_params,
             }
 
             # 添加停損停利參數（如果有）
@@ -767,6 +975,11 @@ class TradingService:
             if error:
                 return {"status": "error", "data": None, "message": error}
 
+            # 處理 price_type
+            order_params = validated_args.order.copy()
+            if order_params.get("price_type") in ["Market", "LimitUp", "LimitDown"]:
+                order_params["price"] = ""
+
             # 構建多條件單參數
             condition_params = {
                 "account": account_obj,
@@ -774,7 +987,7 @@ class TradingService:
                 "end_date": validated_args.end_date,
                 "stop_sign": validated_args.stop_sign,
                 "conditions": validated_args.conditions,
-                "order": validated_args.order,
+                "order": order_params,
             }
 
             # 添加停損停利參數（如果有）
@@ -850,6 +1063,11 @@ class TradingService:
             if error:
                 return {"status": "error", "data": None, "message": error}
 
+            # 處理 price_type
+            order_params = validated_args.order.copy()
+            if order_params.get("price_type") in ["Market", "LimitUp", "LimitDown"]:
+                order_params["price"] = ""
+
             # 構建當沖條件單參數
             condition_params = {
                 "account": account_obj,
@@ -857,7 +1075,7 @@ class TradingService:
                 "end_date": validated_args.end_date,
                 "stop_sign": validated_args.stop_sign,
                 "conditions": validated_args.conditions,
-                "order": validated_args.order,
+                "order": order_params,
             }
 
             # 調用 SDK 建立當沖條件單
@@ -1026,10 +1244,16 @@ class TradingService:
 
             # 主單
             ord_args = ConditionOrderArgs(**validated.order)
+
+            # 當 price_type 為 Market, LimitUp, LimitDown 時，price 應為空
+            price_val = ord_args.price
+            if ord_args.price_type in ["Market", "LimitUp", "LimitDown"]:
+                price_val = None
+
             order = ConditionOrder(
                 buy_sell=to_bs_action(ord_args.buy_sell),
                 symbol=ord_args.symbol,
-                price=ord_args.price,
+                price=price_val,
                 quantity=ord_args.quantity,
                 market_type=to_condition_market_type(ord_args.market_type),
                 price_type=to_condition_price_type(ord_args.price_type),
@@ -1083,14 +1307,14 @@ class TradingService:
             # 呼叫 SDK：multi_condition_day_trade
             stock_client = self._stock_client_for("multi_condition_day_trade")
             result = stock_client.multi_condition_day_trade(
-                account_obj,
-                to_stop_sign(validated.stop_sign),
-                validated.end_time,
-                conditions,
-                order,
-                daytrade_obj,
-                tpsl,
-                validated.fix_session,
+                account=account_obj,
+                stop_sign=to_stop_sign(validated.stop_sign),
+                end_time=validated.end_time,
+                conditions=conditions,
+                order=order,
+                daytrade=daytrade_obj,
+                tpsl=tpsl,
+                fix_session=validated.fix_session,
             )
 
             if result and hasattr(result, "is_success") and result.is_success:
@@ -1214,6 +1438,11 @@ class TradingService:
             if error:
                 return {"status": "error", "data": None, "message": error}
 
+            # 處理 price_type
+            order_params = validated_args.order.copy()
+            if order_params.get("price_type") in ["Market", "LimitUp", "LimitDown"]:
+                order_params["price"] = ""
+
             # 構建分時分量條件單參數
             condition_params = {
                 "account": account_obj,
@@ -1221,7 +1450,7 @@ class TradingService:
                 "end_date": validated_args.end_date,
                 "stop_sign": validated_args.stop_sign,
                 "split": validated_args.split,
-                "order": validated_args.order,
+                "order": order_params,
             }
 
             # 調用 SDK 建立分時分量條件單
@@ -1278,6 +1507,11 @@ class TradingService:
             if error:
                 return {"status": "error", "data": None, "message": error}
 
+            # 處理 price_type
+            order_params = validated_args.order.copy()
+            if order_params.get("price_type") in ["Market", "LimitUp", "LimitDown"]:
+                order_params["price"] = ""
+
             # 構建停損停利條件單參數
             condition_params = {
                 "account": account_obj,
@@ -1285,7 +1519,7 @@ class TradingService:
                 "end_date": validated_args.end_date,
                 "stop_sign": validated_args.stop_sign,
                 "condition": validated_args.condition,
-                "order": validated_args.order,
+                "order": order_params,
                 "tpsl": validated_args.tpsl,
             }
 
@@ -1518,9 +1752,15 @@ class TradingService:
             result = stock_client.get_order_results(account=account_obj)
 
             if result and hasattr(result, "is_success") and result.is_success:
+                data = getattr(result, "data", []) or []
+                # Normalize each entry similar to get_order_results_detail
+                try:
+                    data_list = [self._normalize_order_result(item) for item in data]
+                except Exception:
+                    data_list = self._to_dict(data) or []
                 return {
                     "status": "success",
-                    "data": self._to_dict(result.data),
+                    "data": data_list,
                     "message": "成功獲取委託結果",
                 }
             else:
@@ -1577,6 +1817,7 @@ class TradingService:
                     - modified_time (str): 修改時間
                     - before_qty (int): 修改前數量
                     - after_qty (int): 修改後數量
+
                     - status (str): 狀態
                     - error_message (str): 錯誤訊息（如有）
                 - error_message (str): 錯誤訊息
@@ -1602,9 +1843,15 @@ class TradingService:
             result = stock_client.get_order_results_detail(account=account_obj)
 
             if result and hasattr(result, "is_success") and result.is_success:
+                data = getattr(result, "data", []) or []
+                # Normalize each entry
+                try:
+                    data_list = [self._normalize_order_result(item) for item in data]
+                except Exception:
+                    data_list = self._to_dict(data) or []
                 return {
                     "status": "success",
-                    "data": self._to_dict(result.data),
+                    "data": data_list,
                     "message": "成功獲取委託結果詳細資訊",
                 }
             else:
@@ -1619,6 +1866,115 @@ class TradingService:
                 "data": None,
                 "message": f"獲取委託結果詳細資訊時發生錯誤: {str(e)}",
             }
+
+    def get_order_history(self, args: Dict) -> dict:
+        """
+        查詢歷史委託 (order_history)
+
+        Args:
+            account (str): 帳戶號碼
+            start_date (str): 查詢開始日 (YYYYMMDD)
+            end_date (str, optional): 查詢結束日 (YYYYMMDD), 不填則與 start_date 相同
+
+        Returns:
+            dict: 包含狀態和歷史委託列表
+        """
+        try:
+            validated_args = GetOrderHistoryArgs(**args)
+            account_obj, error = validate_and_get_account(validated_args.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
+
+            start_date = validated_args.start_date
+            end_date = validated_args.end_date or validated_args.start_date
+
+            stock_client = self._stock_client_for("order_history")
+            result = None
+            try:
+                result = stock_client.order_history(account=account_obj, start_date=start_date, end_date=end_date)
+            except TypeError:
+                try:
+                    result = stock_client.order_history(account_obj, start_date, end_date)
+                except TypeError:
+                    result = None
+
+            if result and hasattr(result, "is_success") and result.is_success:
+                data = getattr(result, "data", []) or []
+                try:
+                    data_list = [self._normalize_order_result(item) for item in data]
+                except Exception:
+                    data_list = self._to_dict(data) or []
+                return {
+                    "status": "success",
+                    "data": data_list,
+                    "message": f"查詢成功，共 {len(data_list)} 筆（{start_date}~{end_date}）",
+                }
+
+            error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+            return {"status": "error", "data": None, "message": f"查詢失敗: {error_msg}"}
+
+        except Exception as e:
+            return {"status": "error", "data": None, "message": f"查詢歷史委託時發生錯誤: {str(e)}"}
+
+    def _normalize_filled_data(self, raw_obj):
+        """Normalize FilledData (SDK object or dict) into a clean dict with primitive types."""
+        data = self._to_dict(raw_obj)
+
+        def strip_enum_prefix(val):
+            if isinstance(val, str) and "." in val:
+                return val.split(".")[-1]
+            return val
+
+        enum_keys = ["buy_sell", "order_type"]
+        for k in enum_keys:
+            if k in data:
+                data[k] = strip_enum_prefix(data[k])
+        return data
+
+    def get_filled_history(self, args: Dict) -> dict:
+        """
+        歷史成交查詢 (filled_history)
+
+        Args:
+            account (str): 帳戶號碼
+            start_date (str): 查詢開始日 YYYYMMDD
+            end_date (str, optional): 查詢結束日 YYYYMMDD
+
+        Returns:
+            dict: 成功時回傳成交記錄清單
+        """
+        try:
+            validated = GetFilledHistoryArgs(**args)
+            account_obj, error = validate_and_get_account(validated.account)
+            if error:
+                return {"status": "error", "data": None, "message": error}
+
+            start_date = validated.start_date
+            end_date = validated.end_date or validated.start_date
+
+            stock_client = self._stock_client_for("filled_history")
+            result = None
+            try:
+                result = stock_client.filled_history(account=account_obj, start_date=start_date, end_date=end_date)
+            except TypeError:
+                try:
+                    result = stock_client.filled_history(account_obj, start_date, end_date)
+                except Exception:
+                    result = None
+
+            if result and hasattr(result, "is_success") and result.is_success:
+                data = getattr(result, "data", []) or []
+                try:
+                    data_list = [self._normalize_filled_data(item) for item in data]
+                except Exception:
+                    data_list = self._to_dict(data) or []
+                return {"status": "success", "data": data_list, "message": f"查詢成功，共 {len(data_list)} 筆（{start_date}~{end_date}）"}
+
+            error_msg = getattr(result, "message", "未知錯誤") if result else "API 調用失敗"
+            return {"status": "error", "data": None, "message": f"查詢失敗: {error_msg}"}
+
+        except Exception as e:
+            return {"status": "error", "data": None, "message": f"查詢歷史成交時發生錯誤: {str(e)}"}
 
     def place_trail_profit(self, args: Dict) -> dict:
         """
@@ -1695,10 +2051,10 @@ class TradingService:
             stock_client = self._stock_client_for("trail_profit")
             result = stock_client.trail_profit(
                 account_obj,
-                start_date,
-                end_date,
-                to_stop_sign(stop_sign),
-                trail,
+                start_date=start_date,
+                end_date=end_date,
+                stop_sign=to_stop_sign(stop_sign),
+                trail_order=trail,
             )
 
             if result and hasattr(result, "is_success") and result.is_success:
@@ -1873,7 +2229,7 @@ class PlaceOrderArgs(BaseModel):
     account: str
     buy_sell: str
     symbol: str
-    price: str
+    price: Optional[str] = None
     quantity: int
     market_type: str = "Common"
     price_type: str = "Limit"
@@ -1883,13 +2239,25 @@ class PlaceOrderArgs(BaseModel):
 
 class CancelOrderArgs(BaseModel):
     account: str
-    order_no: str
+    # 向後相容的 order_no
+    order_no: Optional[str] = None
+    # 直接傳入 OrderResult 或 CancelOrderObj
+    order_res: Optional[Dict] = None
+    # 非阻塞選項
+    unblock: bool = False
 
 
 class ModifyPriceArgs(BaseModel):
     account: str
-    order_no: str
-    new_price: float
+    # 支援舊版欄位 (order_no + new_price) 以維持相容
+    order_no: Optional[str] = None
+    new_price: Optional[float] = None
+    # 支援直接傳入 ModifyPriceObj 或 OrderResult
+    order_res: Optional[Dict] = None
+    # 另外支援 price_type 修改 (價別改價)
+    price_type: Optional[str] = None
+    # 非阻塞(default False)
+    unblock: bool = False
 
 
 class ModifyQuantityArgs(BaseModel):
@@ -2118,3 +2486,15 @@ class GetConditionHistoryArgs(BaseModel):
     start_date: str
     end_date: str
     condition_history_status: Optional[str] = None  # 對應 HistoryStatus，選填
+
+
+class GetOrderHistoryArgs(BaseModel):
+    account: str
+    start_date: str
+    end_date: Optional[str] = None
+
+
+class GetFilledHistoryArgs(BaseModel):
+    account: str
+    start_date: str
+    end_date: Optional[str] = None

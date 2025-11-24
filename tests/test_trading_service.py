@@ -142,12 +142,36 @@ class TestTradingServiceMock:
         mock_account_obj = Mock()
         mock_validate.return_value = (mock_account_obj, None)
 
+        # 模擬 SDK 取消成功 (使用 order_no)
+        mock_result = Mock()
+        mock_result.is_success = True
+        trading_service.sdk.stock.cancel_order = Mock(return_value=mock_result)
+
+        # Mock get_order_results to return the order to be cancelled
+        mock_get_results = Mock()
+        mock_get_results.is_success = True
+        mock_get_results.data = [{"order_no": "12345678"}]
+        trading_service.sdk.stock.get_order_results = Mock(return_value=mock_get_results)
+
+        result = trading_service.cancel_order({"account": "1234567", "order_no": "12345678"})
+
+        assert result["status"] == "success"
+        assert "取消成功" in result["message"]
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_cancel_order_with_order_res_success(self, mock_validate, trading_service):
+        """測試取消委託成功（使用 order_res 物件）"""
+        # 模擬驗證成功
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
         # 模擬 SDK 取消成功
         mock_result = Mock()
         mock_result.is_success = True
         trading_service.sdk.stock.cancel_order = Mock(return_value=mock_result)
 
-        result = trading_service.cancel_order({"account": "1234567", "order_no": "12345678"})
+        order_res_obj = {"order_no": "12345678"}
+        result = trading_service.cancel_order({"account": "1234567", "order_res": order_res_obj, "unblock": True})
 
         assert result["status"] == "success"
         assert "取消成功" in result["message"]
@@ -162,6 +186,13 @@ class TestTradingServiceMock:
         # 模擬 SDK 改價成功
         mock_result = Mock()
         mock_result.is_success = True
+        # SDK.make_modify_price_obj 應被呼叫以組成 ModifyPriceObj
+        trading_service.sdk.stock.make_modify_price_obj = Mock(return_value={"order_no": "12345678"})
+        # Mock get_order_results to provide a matching order when using order_no mode
+        mock_get_results = Mock()
+        mock_get_results.is_success = True
+        mock_get_results.data = [{"order_no": "12345678"}]
+        trading_service.sdk.stock.get_order_results = Mock(return_value=mock_get_results)
         trading_service.sdk.stock.modify_price = Mock(return_value=mock_result)
 
         result = trading_service.modify_price({"account": "1234567", "order_no": "12345678", "new_price": 505.0})
@@ -275,6 +306,34 @@ class TestTradingServiceMock:
         assert "成功獲取委託結果" in result["message"]
 
     @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_get_order_results_normalize_enum(self, mock_validate, trading_service):
+        """測試 get_order_results 能將 SDK 的 enum 字串正規化為簡單名稱 """
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = [
+            {
+                "order_no": "ORD999",
+                "stock_no": "2330",
+                "buy_sell": "BSAction.Sell",
+                "order_type": "OrderType.DayTrade",
+                "price_type": "PriceType.Limit",
+                "status": "Status.10",
+            }
+        ]
+        trading_service.sdk.stock.get_order_results = Mock(return_value=mock_result)
+
+        result = trading_service.get_order_results({"account": "1234567"})
+
+        assert result["status"] == "success"
+        assert result["data"][0]["order_no"] == "ORD999"
+        assert result["data"][0]["buy_sell"] == "Sell"
+        assert result["data"][0]["order_type"] == "DayTrade"
+        assert result["data"][0]["price_type"] == "Limit"
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_get_order_results_detail_success(self, mock_validate, trading_service):
         """測試獲取委託結果詳細成功"""
         # 模擬驗證成功
@@ -303,6 +362,35 @@ class TestTradingServiceMock:
         assert isinstance(result["data"], list)
         assert len(result["data"]) == 1
         assert "成功獲取委託結果詳細資訊" in result["message"]
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_get_order_results_detail_normalize_enum(self, mock_validate, trading_service):
+        """測試 get_order_results_detail 能將 SDK 的 enum 字串正規化為簡單名稱 """
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        # 模擬 SDK 回傳 enum 字串
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = [
+            {
+                "order_no": "ORD123",
+                "stock_no": "2330",
+                "buy_sell": "BSAction.Buy",
+                "order_type": "OrderType.Stock",
+                "details": [{"status": "Status.90", "modified_time": "10:00:00"}],
+            }
+        ]
+        trading_service.sdk.stock.get_order_results_detail = Mock(return_value=mock_result)
+
+        result = trading_service.get_order_results_detail({"account": "1234567"})
+
+        assert result["status"] == "success"
+        assert result["data"][0]["order_no"] == "ORD123"
+        assert result["data"][0]["buy_sell"] == "Buy"
+        assert result["data"][0]["order_type"] == "Stock"
+        assert isinstance(result["data"][0]["details"], list)
+        assert result["data"][0]["details"][0]["modified_time"] == "10:00:00"
 
     @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_place_condition_order_success(self, mock_validate, trading_service):
@@ -392,6 +480,122 @@ class TestTradingServiceMock:
         assert "成功獲取移動鎖利單清單" in result["message"]
 
     @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_get_order_history_success(self, mock_validate, trading_service):
+        """測試查詢歷史委託成功"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = [
+            {
+                "order_no": "12345678",
+                "stock_no": "2330",
+                "buy_sell": "Buy",
+                "quantity": 1000,
+                "price": 500.0,
+                "status": 10,
+            }
+        ]
+        trading_service.sdk.stock.order_history = Mock(return_value=mock_result)
+
+        result = trading_service.get_order_history({"account": "1234567", "start_date": "20251118", "end_date": "20251118"})
+
+        assert result["status"] == "success"
+        assert isinstance(result["data"], list)
+        assert len(result["data"]) == 1
+        assert "查詢成功" in result["message"]
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_get_order_history_normalize_enum(self, mock_validate, trading_service):
+        """測試 get_order_history 能將 SDK 的 enum 字串正規化為簡單名稱 """
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = [
+            {
+                "order_no": "ORD999",
+                "stock_no": "2330",
+                "buy_sell": "BSAction.Sell",
+                "order_type": "OrderType.DayTrade",
+                "price_type": "PriceType.Limit",
+                "details": [{"status": "Status.90", "modified_time": "09:00:32.477"}],
+            }
+        ]
+        trading_service.sdk.stock.order_history = Mock(return_value=mock_result)
+
+        result = trading_service.get_order_history({"account": "1234567", "start_date": "20251118"})
+
+        assert result["status"] == "success"
+        assert result["data"][0]["order_no"] == "ORD999"
+        assert result["data"][0]["buy_sell"] == "Sell"
+        assert result["data"][0]["order_type"] == "DayTrade"
+        assert result["data"][0]["price_type"] == "Limit"
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_get_filled_history_success(self, mock_validate, trading_service):
+        """測試查詢歷史成交成功"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = [
+            {
+                "date": "2025/11/18",
+                "branch_no": "20203",
+                "account": "1234567",
+                "order_no": "12345678",
+                "stock_no": "2330",
+                "buy_sell": "Buy",
+                "filled_no": "FILL123",
+                "filled_avg_price": 500.0,
+                "filled_qty": 1000,
+                "filled_price": 500.0,
+                "order_type": "Stock",
+                "filled_time": "10:31:00.931",
+            }
+        ]
+        trading_service.sdk.stock.filled_history = Mock(return_value=mock_result)
+
+        result = trading_service.get_filled_history({"account": "1234567", "start_date": "20251118"})
+
+        assert result["status"] == "success"
+        assert isinstance(result["data"], list)
+        assert len(result["data"]) == 1
+        assert "查詢成功" in result["message"]
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_get_filled_history_normalize_enum(self, mock_validate, trading_service):
+        """測試 get_filled_history 能將 SDK 的 enum 字串正規化為簡單名稱 """
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = [
+            {
+                "order_no": "ORD777",
+                "stock_no": "2330",
+                "buy_sell": "BSAction.Sell",
+                "order_type": "OrderType.Stock",
+                "filled_qty": 500,
+                "filled_price": 800.0,
+                "filled_time": "11:00:00.000",
+            }
+        ]
+        trading_service.sdk.stock.filled_history = Mock(return_value=mock_result)
+
+        result = trading_service.get_filled_history({"account": "1234567", "start_date": "20251118"})
+
+        assert result["status"] == "success"
+        assert result["data"][0]["order_no"] == "ORD777"
+        assert result["data"][0]["buy_sell"] == "Sell"
+        assert result["data"][0]["order_type"] == "Stock"
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_place_trail_profit_success(self, mock_validate, trading_service):
         """測試移動鎖利條件單建立成功"""
         # 模擬驗證成功
@@ -449,3 +653,158 @@ class TestTradingServiceMock:
         assert isinstance(result["data"], list)
         assert len(result["data"]) == 1
         assert "查詢成功" in result["message"]
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_place_multi_condition_order_success(self, mock_validate, trading_service):
+        """測試多條件單建立成功"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = {"condition_no": "MULTI001"}
+        trading_service.sdk.stock.place_multi_condition_order = Mock(return_value=mock_result)
+
+        result = trading_service.place_multi_condition_order({
+            "account": "1234567",
+            "start_date": "20250101",
+            "end_date": "20251231",
+            "stop_sign": "Full",
+            "conditions": [
+                {"market_type": "Reference", "symbol": "2330", "trigger": "MatchedPrice", "trigger_value": "500", "comparison": "Greater"},
+                {"market_type": "Reference", "symbol": "2330", "trigger": "TotalQuantity", "trigger_value": "10000", "comparison": "Greater"}
+            ],
+            "order": {"buy_sell": "Buy", "symbol": "2330", "price": "500", "quantity": 1000}
+        })
+
+        assert result["status"] == "success"
+        assert result["data"]["condition_no"] == "MULTI001"
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_place_daytrade_condition_order_success(self, mock_validate, trading_service):
+        """測試當沖條件單建立成功"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = {"condition_no": "DT001"}
+        trading_service.sdk.stock.place_daytrade_condition_order = Mock(return_value=mock_result)
+
+        result = trading_service.place_daytrade_condition_order({
+            "account": "1234567",
+            "start_date": "20250101",
+            "end_date": "20251231",
+            "stop_sign": "Full",
+            "conditions": [{"market_type": "Reference", "symbol": "2330", "trigger": "MatchedPrice", "trigger_value": "500", "comparison": "Greater"}],
+            "order": {"buy_sell": "Buy", "symbol": "2330", "price": "500", "quantity": 1000, "order_type": "DayTrade"}
+        })
+
+        assert result["status"] == "success"
+        assert result["data"]["condition_no"] == "DT001"
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_place_daytrade_multi_condition_order_success(self, mock_validate, trading_service):
+        """測試當沖多條件單建立成功"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = Mock(guid="DTMULTI001")
+        trading_service.sdk.stock.multi_condition_day_trade = Mock(return_value=mock_result)
+
+        result = trading_service.place_daytrade_multi_condition_order({
+            "account": "1234567",
+            "stop_sign": "Full",
+            "end_time": "130000",
+            "conditions": [{"market_type": "Reference", "symbol": "2330", "trigger": "MatchedPrice", "trigger_value": "500", "comparison": "Greater"}],
+            "order": {"buy_sell": "Buy", "symbol": "2330", "price": "500", "quantity": 1000, "order_type": "DayTrade"},
+            "daytrade": {"day_trade_end_time": "133000", "auto_cancel": False, "price": "510", "price_type": "Limit"}
+        })
+
+        assert result["status"] == "success"
+        assert result["data"]["guid"] == "DTMULTI001"
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_place_time_slice_order_success(self, mock_validate, trading_service):
+        """測試分時分量單建立成功"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = {"guid": "TS001"}
+        trading_service.sdk.stock.place_time_slice_order = Mock(return_value=mock_result)
+
+        result = trading_service.place_time_slice_order({
+            "account": "1234567",
+            "start_date": "20250101",
+            "end_date": "20250102",
+            "stop_sign": "Full",
+            "split": {"method": "Type1", "interval": 30, "single_quantity": 1000, "total_quantity": 5000, "start_time": "090000"},
+            "order": {"buy_sell": "Buy", "symbol": "2330", "price": "500", "quantity": 5000}
+        })
+
+        assert result["status"] == "success"
+        assert result["data"]["guid"] == "TS001"
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_place_tpsl_condition_order_success(self, mock_validate, trading_service):
+        """測試停損停利條件單建立成功"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = {"condition_no": "TPSL001"}
+        trading_service.sdk.stock.place_condition_order = Mock(return_value=mock_result)
+
+        result = trading_service.place_tpsl_condition_order({
+            "account": "1234567",
+            "start_date": "20250101",
+            "end_date": "20251231",
+            "stop_sign": "Full",
+            "condition": {"market_type": "Reference", "symbol": "2330", "trigger": "MatchedPrice", "trigger_value": "500", "comparison": "Greater"},
+            "order": {"buy_sell": "Buy", "symbol": "2330", "price": "500", "quantity": 1000},
+            "tpsl": {
+                "stop_sign": "Full",
+                "tp": {"target_price": "550", "price": "550"},
+                "sl": {"target_price": "450", "price": "450"}
+            }
+        })
+
+        assert result["status"] == "success"
+        assert result["data"]["condition_no"] == "TPSL001"
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_get_condition_order_by_id_success(self, mock_validate, trading_service):
+        """測試依ID查詢條件單成功"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = {"condition_no": "COND001", "status": "Active"}
+        trading_service.sdk.stock.get_condition_order_by_id = Mock(return_value=mock_result)
+
+        result = trading_service.get_condition_order_by_id({"account": "1234567", "condition_no": "COND001"})
+
+        assert result["status"] == "success"
+        assert result["data"]["condition_no"] == "COND001"
+
+    @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
+    def test_get_daytrade_condition_by_id_success(self, mock_validate, trading_service):
+        """測試依ID查詢當沖條件單成功"""
+        mock_account_obj = Mock()
+        mock_validate.return_value = (mock_account_obj, None)
+
+        mock_result = Mock()
+        mock_result.is_success = True
+        mock_result.data = {"condition_no": "DT001", "status": "Active"}
+        trading_service.sdk.stock.get_daytrade_condition_by_id = Mock(return_value=mock_result)
+
+        result = trading_service.get_daytrade_condition_by_id({"account": "1234567", "condition_no": "DT001"})
+
+        assert result["status"] == "success"
+        assert result["data"]["condition_no"] == "DT001"
