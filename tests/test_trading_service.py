@@ -626,7 +626,7 @@ class TestTradingServiceMock:
                     "price": "850.00",
                     "direction": "Up",
                     "percentage": 5,
-                    "buysell": "Buy",
+                    "buy_sell": "Buy",
                     "quantity": 1000,
                     "price_type": "MatchedPrice",
                     "diff": 5,
@@ -793,13 +793,13 @@ class TestTradingServiceMock:
 
         mock_result = Mock()
         mock_result.is_success = True
-        mock_result.data = {"condition_no": "COND001", "status": "Active"}
+        mock_result.data = {"guid": "8ff3472b-185a-488c-be5a-b478deda080c", "status": "Active"}
         trading_service.sdk.stock.get_condition_order_by_id = Mock(return_value=mock_result)
 
-        result = trading_service.get_condition_order_by_id({"account": "1234567", "condition_no": "COND001"})
+        result = trading_service.get_condition_order_by_id({"account": "1234567", "guid": "8ff3472b-185a-488c-be5a-b478deda080c"})
 
         assert result["status"] == "success"
-        assert result["data"]["condition_no"] == "COND001"
+        assert result["data"]["guid"] == "8ff3472b-185a-488c-be5a-b478deda080c"
 
     @patch("fubon_api_mcp_server.trading_service.validate_and_get_account")
     def test_get_daytrade_condition_by_id_success(self, mock_validate, trading_service):

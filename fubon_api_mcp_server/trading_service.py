@@ -1766,7 +1766,7 @@ class TradingService:
 
         Args:
             account (str): 帳戶號碼
-            condition_no (str): 條件單號
+            guid (str): 條件單號 (GUID)
         """
         try:
             validated_args = GetConditionOrderByIdArgs(**args)
@@ -1776,13 +1776,13 @@ class TradingService:
 
             # 調用 SDK 查詢條件單
             stock_client = self._stock_client_for("get_condition_order_by_id")
-            result = stock_client.get_condition_order_by_id(account=account_obj, condition_no=validated_args.condition_no)
+            result = stock_client.get_condition_order_by_id(account_obj, validated_args.guid)
 
             if result and hasattr(result, "is_success") and result.is_success:
                 return {
                     "status": "success",
                     "data": self._to_dict(result.data),
-                    "message": f"成功獲取條件單 {validated_args.condition_no} 詳細資訊",
+                    "message": f"成功獲取條件單 {validated_args.guid} 詳細資訊",
                 }
             else:
                 error_msg = "查詢條件單失敗"
@@ -2180,7 +2180,7 @@ class TradingService:
                 price=trail_args.price,
                 direction=to_direction(trail_args.direction),
                 percentage=trail_args.percentage,
-                buy_sell=to_bs_action(trail_args.buysell),
+                buy_sell=to_bs_action(trail_args.buy_sell),
                 quantity=trail_args.quantity,
                 price_type=to_condition_price_type(trail_args.price_type),
                 diff=trail_args.diff,
@@ -2206,7 +2206,7 @@ class TradingService:
                         "guid": guid,
                         "condition_no": guid,
                         "symbol": trail_args.symbol,
-                        "buy_sell": trail_args.buysell,
+                        "buy_sell": trail_args.buy_sell,
                         "quantity": trail_args.quantity,
                         "direction": trail_args.direction,
                         "percentage": trail_args.percentage,
@@ -2494,7 +2494,7 @@ class GetConditionOrderArgs(BaseModel):
 
 class GetConditionOrderByIdArgs(BaseModel):
     account: str
-    condition_no: str
+    guid: str
 
 
 class GetDaytradeConditionByIdArgs(BaseModel):
@@ -2576,7 +2576,7 @@ class TrailOrderArgs(BaseModel):
     price: str  # 基準價，至多小數兩位
     direction: str  # Up 或 Down
     percentage: int  # 漲跌百分比（整數）
-    buysell: str  # Buy 或 Sell (官方參數名稱)
+    buy_sell: str  # Buy 或 Sell (官方參數名稱)
     quantity: int  # 委託數量（股）
     price_type: str = "MatchedPrice"
     diff: int  # 追價 tick 數（向下為負值）

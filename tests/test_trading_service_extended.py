@@ -298,7 +298,7 @@ class TestTradingServiceExtended:
                     "price": "850.00",
                     "direction": "Up",
                     "percentage": 5,
-                    "buysell": "Buy",
+                    "buy_sell": "Buy",
                     "quantity": 1000,
                     "price_type": "MatchedPrice",
                     "diff": 5,
@@ -663,7 +663,7 @@ class TestTradingServiceExtended:
         mock_result.message = "查詢失敗：條件單號不存在"
         trading_service.sdk.stock.get_condition_order_by_id = Mock(return_value=mock_result)
 
-        result = trading_service.get_condition_order_by_id({"account": "1234567", "condition_no": "INVALID"})
+        result = trading_service.get_condition_order_by_id({"account": "1234567", "guid": "invalid-guid"})
 
         assert result["status"] == "error"
         assert "查詢失敗" in result["message"]
