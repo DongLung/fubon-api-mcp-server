@@ -1994,9 +1994,25 @@ class MarketDataService:
 
     def get_trading_signals(self, args: Dict) -> dict:
         """
-        專業級多因子交易訊號引擎（已實盤驗證）
+        專業級多因子交易訊號引擎（量化交易增強版）
 
+        整合多時間框架分析、多因子評分系統、風險評估、進出場策略建議。
         自動確保資料是最新的，如果本地資料過舊或不足會自動從 API 更新。
+
+        Returns:
+            dict: 成功時返回完整的交易分析報告，包含：
+                - overall_signal: 整體訊號 (strong_buy/buy/neutral/sell/strong_sell)
+                - signal_score: 綜合評分 (-100 到 +100)
+                - confidence: 信心度 (high/medium/low)
+                - trend_analysis: 多時間框架趨勢分析
+                - technical_indicators: 完整技術指標數據
+                - momentum_analysis: 動量分析
+                - volume_analysis: 成交量分析
+                - support_resistance: 支撐壓力位
+                - risk_metrics: 風險指標
+                - entry_exit_strategy: 進出場策略
+                - multi_factor_scores: 多因子評分詳情
+                - pattern_recognition: K線型態識別
         """
         try:
             params = GetTradingSignalsArgs(**args)
@@ -2008,12 +2024,11 @@ class MarketDataService:
             # 確保資料是最新且足夠的（自動從 API 更新）
             self._ensure_fresh_data(symbol, min_days=MIN_REQUIRED_DAYS)
 
-            # 讀取更長週期的資料（至少 200 根，避免邊界效應）
+            # 讀取更長週期的資料
             df_daily = self._read_local_stock_data(symbol)
             if df_daily is None or df_daily.empty:
                 return {"status": "error", "data": None, "message": f"無法取得 {symbol} 歷史資料，請確認股票代碼正確且 API 服務正常"}
 
-            # 如果資料仍不足，返回明確的錯誤訊息
             if len(df_daily) < 50:
                 return {
                     "status": "error",
@@ -2021,12 +2036,12 @@ class MarketDataService:
                     "message": f"資料筆數不足（目前 {len(df_daily)} 筆，需要至少 50 筆），可能是新上市股票或 API 暫時無法取得資料",
                 }
 
-            # 建立週線資料（多時間框架確認）
-            # 有些測試或來源資料可能缺少 open 欄位，若缺少則使用 close 作為 open 的替代值
+            # 確保有 open 欄位
             if "open" not in df_daily.columns:
                 df_daily = df_daily.copy()
                 df_daily["open"] = df_daily["close"]
 
+            # === 建立多時間框架資料 ===
             df_weekly = (
                 df_daily.resample("W-FRI", on="date")
                 .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
@@ -2034,169 +2049,800 @@ class MarketDataService:
                 .reset_index()
             )
 
-            # 日期過濾（日線）
+            df_monthly = (
+                df_daily.resample("ME", on="date")
+                .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                .dropna()
+                .reset_index()
+            )
+
+            # 日期過濾
             df = df_daily.sort_values("date")
             if getattr(params, "from_date", None):
                 df = df[df["date"] >= pd.to_datetime(params.from_date)]
             if getattr(params, "to_date", None):
                 df = df[df["date"] <= pd.to_datetime(params.to_date)]
             if len(df) < 50:
-                return {"status": "error", "data": None, "message": f"指定日期範圍內資料筆數不足 50 筆（目前 {len(df)} 筆），請調整日期範圍"}
+                return {"status": "error", "data": None, "message": f"指定日期範圍內資料筆數不足 50 筆（目前 {len(df)} 筆）"}
 
             close = df["close"]
             high = df["high"]
             low = df["low"]
+            open_price = df["open"]
             volume = df["volume"]
             dates = df["date"]
 
-        # === 計算所有指標（使用更穩健參數）===
+            # === 計算完整技術指標 ===
+            # 布林通道
             bb = indicators.calculate_bollinger_bands(close, period=20, stddev=2.0)
-            rsi = indicators.calculate_rsi(close, period=14)
+
+            # RSI 多週期
+            rsi_14 = indicators.calculate_rsi(close, period=14)
+            rsi_7 = indicators.calculate_rsi(close, period=7)
+            rsi_21 = indicators.calculate_rsi(close, period=21)
+
+            # MACD
             macd_res = indicators.calculate_macd(close, fast=12, slow=26, signal=9)
+
+            # KD 隨機指標
             kd = indicators.calculate_kd(high, low, close, period=9, smooth_k=3, smooth_d=3)
+
+            # 移動平均線系統
+            ema5 = close.ewm(span=5, adjust=False).mean()
+            ema10 = close.ewm(span=10, adjust=False).mean()
             ema20 = close.ewm(span=20, adjust=False).mean()
             ema50 = close.ewm(span=50, adjust=False).mean()
+            ema60 = close.ewm(span=60, adjust=False).mean()
+            ema120 = close.ewm(span=120, adjust=False).mean()
             ema200 = close.ewm(span=200, adjust=False).mean()
+            sma20 = close.rolling(20).mean()
+            sma60 = close.rolling(60).mean()
+
+            # ATR 波動率
             atr = indicators.calculate_atr(high, low, close, period=14)
-            vol_sma = volume.rolling(20).mean()
-            vol_rate = volume / vol_sma.replace(0, np.nan)
+            atr_percent = atr / close * 100
 
-        # 週線趨勢（關鍵過濾條件）
-            weekly_trend = "up" if df_weekly['close'].iloc[-1] > df_weekly['close'].rolling(10).mean().iloc[-1] else "down"
+            # ADX 趨勢強度
+            adx = indicators.calculate_adx(high, low, close, period=14)
 
+            # Williams %R
+            williams_r = indicators.calculate_williams_r(high, low, close, period=14)
+
+            # CCI 順勢指標
+            cci = indicators.calculate_cci(high, low, close, period=20)
+
+            # ROC 變動率
+            roc = indicators.calculate_roc(close, period=10)
+
+            # OBV 能量潮
+            obv = indicators.calculate_obv(close, volume)
+            obv_ema = obv.ewm(span=20, adjust=False).mean()
+
+            # 成交量分析
+            vol_sma20 = volume.rolling(20).mean()
+            vol_sma5 = volume.rolling(5).mean()
+            vol_rate = volume / vol_sma20.replace(0, np.nan)
+
+            # === 計算支撐壓力位 ===
+            recent_high = high.tail(60).max()
+            recent_low = low.tail(60).min()
+            pivot = (recent_high + recent_low + close.iloc[-1]) / 3
+            r1 = 2 * pivot - recent_low
+            r2 = pivot + (recent_high - recent_low)
+            r3 = recent_high + 2 * (pivot - recent_low)
+            s1 = 2 * pivot - recent_high
+            s2 = pivot - (recent_high - recent_low)
+            s3 = recent_low - 2 * (recent_high - pivot)
+
+            # === 多時間框架趨勢分析 ===
+            # 日線趨勢
+            daily_trend = "up" if close.iloc[-1] > ema20.iloc[-1] else "down"
+            daily_trend_strength = abs(close.iloc[-1] - ema20.iloc[-1]) / ema20.iloc[-1] * 100
+
+            # 週線趨勢
+            weekly_close = df_weekly['close'].iloc[-1] if len(df_weekly) > 0 else close.iloc[-1]
+            weekly_ma10 = df_weekly['close'].rolling(10).mean().iloc[-1] if len(df_weekly) >= 10 else weekly_close
+            weekly_trend = "up" if weekly_close > weekly_ma10 else "down"
+
+            # 月線趨勢
+            monthly_close = df_monthly['close'].iloc[-1] if len(df_monthly) > 0 else close.iloc[-1]
+            monthly_ma6 = df_monthly['close'].rolling(6).mean().iloc[-1] if len(df_monthly) >= 6 else monthly_close
+            monthly_trend = "up" if monthly_close > monthly_ma6 else "down"
+
+            # 均線多頭/空頭排列
+            ma_alignment = self._check_ma_alignment(
+                close.iloc[-1], ema5.iloc[-1], ema10.iloc[-1], ema20.iloc[-1], ema60.iloc[-1]
+            )
+
+            # === 構建最新數據快照 ===
             latest = {
-            "date": dates.iloc[-1],
-            "close": float(close.iloc[-1]),
-            "high": float(high.iloc[-1]),
-            "low": float(low.iloc[-1]),
-            "volume": int(volume.iloc[-1]),
-            "vol_rate": float(vol_rate.iloc[-1]) if not pd.isna(vol_rate.iloc[-1]) else 1.0,
-            "bb_position": (close.iloc[-1] - bb["lower"].iloc[-1]) / (bb["upper"].iloc[-1] - bb["lower"].iloc[-1] + 1e-8),
-            "bb_width_ratio": bb["width"].iloc[-1] / bb["width"].rolling(20).mean().iloc[-1],
-            "rsi": float(rsi.iloc[-1]),
-            "macd": float(macd_res["macd"].iloc[-1]),
-            "macd_signal": float(macd_res["signal"].iloc[-1]),
-            "macd_hist": float(macd_res["histogram"].iloc[-1]),
-            "macd_hist_prev": float(macd_res["histogram"].iloc[-2]) if len(macd_res) > 1 else 0,
-            "k": float(kd["k"].iloc[-1]),
-            "d": float(kd["d"].iloc[-1]),
-            "k_prev": float(kd["k"].iloc[-2]) if len(kd) > 1 else 50,
-            "d_prev": float(kd["d"].iloc[-2]) if len(kd) > 1 else 50,
-            "ema20": float(ema20.iloc[-1]),
-            "ema50": float(ema50.iloc[-1]),
-            "ema200": float(ema200.iloc[-1]),
-            "atr": float(atr.iloc[-1]),
-            "weekly_trend": weekly_trend,
-        }
+                "date": dates.iloc[-1],
+                "close": float(close.iloc[-1]),
+                "open": float(open_price.iloc[-1]),
+                "high": float(high.iloc[-1]),
+                "low": float(low.iloc[-1]),
+                "volume": int(volume.iloc[-1]),
+                "change_percent": float((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100) if len(close) > 1 else 0,
+            }
 
-        # === 專業訊號判斷邏輯（順勢 + 超買超賣 + 背離過濾）===
-            score = 0
+            # === 多因子評分系統 ===
+            factor_scores = {}
             reasons = []
-            indicators_detail = {}
-            confidence = "low"
+            total_score = 0
 
-            # 1. 大趨勢過濾（最重要！）
-            if latest["close"] > latest["ema200"] and weekly_trend == "up":
-                trend = "bullish"
-                reasons.append("價格站上200日均線 + 週線趨勢向上 → 多頭主導")
-                score += 30
-            elif latest["close"] < latest["ema200"] and weekly_trend == "down":
-                trend = "bearish"
-                reasons.append("價格跌破200日均線 + 週線趨勢向下 → 空頭主導")
-                score -= 30
-            else:
-                trend = "sideways"
-                reasons.append("趨勢不明（震盪市）")
+            # 1. 趨勢因子 (權重: 30%)
+            trend_score = self._calculate_trend_score(
+                close=close.iloc[-1],
+                ema20=ema20.iloc[-1],
+                ema50=ema50.iloc[-1],
+                ema200=ema200.iloc[-1],
+                adx=adx.iloc[-1] if not pd.isna(adx.iloc[-1]) else 20,
+                weekly_trend=weekly_trend,
+                monthly_trend=monthly_trend,
+                ma_alignment=ma_alignment
+            )
+            factor_scores["trend"] = trend_score
+            total_score += trend_score["score"] * 0.30
 
-            # 2. Bollinger Bands 訊號（收縮後擴張 + 突破）
-            if latest["bb_position"] < 0.1 and latest["bb_width_ratio"] > 1.2 and latest["close"] > latest["ema20"]:
-                score += 25
-                reasons.append("布林通道下軌強力反彈 + 通道開始擴張 → 強力買訊")
-                indicators_detail["bb"] = "strong_buy"
-            elif latest["bb_position"] > 0.9 and latest["bb_width_ratio"] > 1.2 and latest["close"] < latest["ema20"]:
-                score -= 25
-                reasons.append("布林通道上軌遇阻回落 + 通道擴張 → 強力賣訊")
-                indicators_detail["bb"] = "strong_sell"
+            # 2. 動量因子 (權重: 25%)
+            momentum_score = self._calculate_momentum_score(
+                rsi=rsi_14.iloc[-1],
+                rsi_prev=rsi_14.iloc[-2] if len(rsi_14) > 1 else 50,
+                macd=macd_res["macd"].iloc[-1],
+                macd_signal=macd_res["signal"].iloc[-1],
+                macd_hist=macd_res["histogram"].iloc[-1],
+                macd_hist_prev=macd_res["histogram"].iloc[-2] if len(macd_res["histogram"]) > 1 else 0,
+                k=kd["k"].iloc[-1],
+                d=kd["d"].iloc[-1],
+                k_prev=kd["k"].iloc[-2] if len(kd["k"]) > 1 else 50,
+                d_prev=kd["d"].iloc[-2] if len(kd["d"]) > 1 else 50,
+                williams_r=williams_r.iloc[-1] if not pd.isna(williams_r.iloc[-1]) else -50,
+                cci=cci.iloc[-1] if not pd.isna(cci.iloc[-1]) else 0,
+                roc=roc.iloc[-1] if not pd.isna(roc.iloc[-1]) else 0
+            )
+            factor_scores["momentum"] = momentum_score
+            total_score += momentum_score["score"] * 0.25
 
-            # 3. RSI 超買超賣 + 背離（簡易版）
-            if latest["rsi"] < 30 and rsi.iloc[-2] > rsi.iloc[-1]:  # RSI 低檔向上
-                score += 20
-                reasons.append(f"RSI({latest['rsi']:.1f}) 超賣區向上 → 反彈訊號")
-            elif latest["rsi"] > 70 and rsi.iloc[-2] < rsi.iloc[-1]:
-                score -= 20
-                reasons.append(f"RSI({latest['rsi']:.1f}) 超買區向下 → 回檔訊號")
+            # 3. 波動率/布林因子 (權重: 15%)
+            volatility_score = self._calculate_volatility_score(
+                close=close.iloc[-1],
+                bb_upper=bb["upper"].iloc[-1],
+                bb_middle=bb["middle"].iloc[-1],
+                bb_lower=bb["lower"].iloc[-1],
+                bb_width=bb["width"].iloc[-1],
+                bb_width_avg=bb["width"].rolling(20).mean().iloc[-1] if len(bb["width"]) >= 20 else bb["width"].iloc[-1],
+                atr_percent=atr_percent.iloc[-1] if not pd.isna(atr_percent.iloc[-1]) else 2.0
+            )
+            factor_scores["volatility"] = volatility_score
+            total_score += volatility_score["score"] * 0.15
 
-            # 4. MACD 金叉死叉 + 柱狀圖放大
-            if latest["macd_hist"] > 0 and latest["macd_hist"] > latest["macd_hist_prev"] and latest["macd"] > latest["macd_signal"]:
-                score += 22
-                reasons.append("MACD 柱狀圖放大 + 金叉確認 → 多頭動能增強")
-            elif latest["macd_hist"] < 0 and latest["macd_hist"] < latest["macd_hist_prev"] and latest["macd"] < latest["macd_signal"]:
-                score -= 22
-                reasons.append("MACD 柱狀圖放大 + 死叉確認 → 空頭動能增強")
+            # 4. 成交量因子 (權重: 15%)
+            volume_score = self._calculate_volume_score(
+                volume=volume.iloc[-1],
+                vol_sma20=vol_sma20.iloc[-1] if not pd.isna(vol_sma20.iloc[-1]) else volume.iloc[-1],
+                vol_rate=vol_rate.iloc[-1] if not pd.isna(vol_rate.iloc[-1]) else 1.0,
+                obv=obv.iloc[-1],
+                obv_ema=obv_ema.iloc[-1] if not pd.isna(obv_ema.iloc[-1]) else obv.iloc[-1],
+                price_change=latest["change_percent"]
+            )
+            factor_scores["volume"] = volume_score
+            total_score += volume_score["score"] * 0.15
 
-            # 5. KD 金叉死叉（低檔鈍化後金叉最強）
-            if latest["k"] < 20 and latest["k"] > latest["d"] and latest["k_prev"] < latest["d_prev"]:
-                score += 18
-                reasons.append("KD 低檔金叉 → 超賣反彈")
-            elif latest["k"] > 80 and latest["k"] < latest["d"] and latest["k_prev"] > latest["d_prev"]:
-                score -= 18
-                reasons.append("KD 高檔死叉 → 超買回檔")
+            # 5. 價格位置因子 (權重: 15%)
+            price_position_score = self._calculate_price_position_score(
+                close=close.iloc[-1],
+                recent_high=recent_high,
+                recent_low=recent_low,
+                pivot=pivot,
+                r1=r1,
+                s1=s1
+            )
+            factor_scores["price_position"] = price_position_score
+            total_score += price_position_score["score"] * 0.15
 
-            # 6. 成交量配合（爆量突破最可信）
-            if latest["vol_rate"] > 1.5:
-                if score > 0:
-                    score += 15
-                    reasons.append(f"成交量放大 {latest['vol_rate']:.1f} 倍 → 多頭訊號加分")
-                else:
-                    reasons.append("爆量卻下跌 → 可能洗盤或出貨")
+            # === 綜合訊號判定 ===
+            overall_signal, confidence, action_desc = self._determine_overall_signal(total_score, factor_scores)
 
-            # === 最終訊號判定 ===
-            if score >= 60:
-                overall_signal = "strong_buy"
-                confidence = "high"
-                recommendations = f"強烈買進建議，可重倉操作，止損設於 {latest['close'] - 2*latest['atr']:.2f}"
-            elif score >= 30:
-                overall_signal = "buy"
-                confidence = "medium"
-                recommendations = f"偏多操作，可進場，止損設於 {latest['close'] - 1.5*latest['atr']:.2f}"
-            elif score <= -60:
-                overall_signal = "strong_sell"
-                confidence = "high"
-                recommendations = "強烈賣出或放空，止損設於近期高點"
-            elif score <= -30:
-                overall_signal = "sell"
-                confidence = "medium"
-                recommendations = "偏空操作，可減倉或放空"
-            else:
-                overall_signal = "neutral"
-                confidence = "low"
-                recommendations = "觀望為主，震盪操作，嚴格止損"
+            # 收集所有理由
+            for factor_name, factor_data in factor_scores.items():
+                reasons.extend(factor_data.get("reasons", []))
 
+            # === K線型態識別 ===
+            pattern = self._identify_candlestick_pattern(
+                open_prices=open_price.tail(5).values,
+                high_prices=high.tail(5).values,
+                low_prices=low.tail(5).values,
+                close_prices=close.tail(5).values
+            )
+
+            # === 進出場策略建議 ===
+            entry_exit = self._calculate_entry_exit_strategy(
+                close=close.iloc[-1],
+                atr=atr.iloc[-1] if not pd.isna(atr.iloc[-1]) else close.iloc[-1] * 0.02,
+                signal=overall_signal,
+                s1=s1,
+                s2=s2,
+                r1=r1,
+                r2=r2,
+                recent_high=recent_high,
+                recent_low=recent_low
+            )
+
+            # === 風險指標 ===
+            risk_metrics = self._calculate_risk_metrics(
+                close=close,
+                atr=atr.iloc[-1] if not pd.isna(atr.iloc[-1]) else close.iloc[-1] * 0.02,
+                atr_percent=atr_percent.iloc[-1] if not pd.isna(atr_percent.iloc[-1]) else 2.0,
+                adx=adx.iloc[-1] if not pd.isna(adx.iloc[-1]) else 20,
+                bb_width=bb["width"].iloc[-1] if not pd.isna(bb["width"].iloc[-1]) else 0.1
+            )
+
+            # === 組裝返回結果 ===
             return {
                 "status": "success",
                 "message": f"交易訊號分析成功: {symbol}",
                 "data": {
                     "symbol": symbol,
-                    "analysis_date": latest["date"].isoformat(),
+                    "analysis_date": latest["date"].isoformat() if hasattr(latest["date"], "isoformat") else str(latest["date"]),
+                    "current_price": latest["close"],
+                    "change_percent": round(latest["change_percent"], 2),
+
+                    # 核心訊號
                     "overall_signal": overall_signal,
-                    "signal_score": round(score, 2),
+                    "signal_score": round(total_score, 2),
                     "confidence": confidence,
-                    "trend": trend,
-                    "weekly_trend": weekly_trend,
-                    "indicators": {
-                        **latest,
-                        "bb": pd.DataFrame(bb).iloc[-5:].to_dict(orient="records"),  # 最近5根布林細節
-                        "rsi_trend": "oversold" if latest["rsi"] < 30 else "overbought" if latest["rsi"] > 70 else "neutral",
-                        "macd_status": "bullish" if latest["macd_hist"] > 0 else "bearish",
-                        "kd_status": "golden_cross" if latest["k"] > latest["d"] and latest["k_prev"] <= latest["d_prev"] else "death_cross" if latest["k"] < latest["d"] and latest["k_prev"] >= latest["d_prev"] else "normal",
+                    "action_description": action_desc,
+
+                    # 多時間框架趨勢
+                    "trend_analysis": {
+                        "daily_trend": daily_trend,
+                        "daily_trend_strength": round(daily_trend_strength, 2),
+                        "weekly_trend": weekly_trend,
+                        "monthly_trend": monthly_trend,
+                        "ma_alignment": ma_alignment,
+                        "trend_consistency": self._check_trend_consistency(daily_trend, weekly_trend, monthly_trend),
                     },
+
+                    # 完整技術指標
+                    "technical_indicators": {
+                        "moving_averages": {
+                            "ema5": round(ema5.iloc[-1], 2),
+                            "ema10": round(ema10.iloc[-1], 2),
+                            "ema20": round(ema20.iloc[-1], 2),
+                            "ema50": round(ema50.iloc[-1], 2) if not pd.isna(ema50.iloc[-1]) else None,
+                            "ema60": round(ema60.iloc[-1], 2) if not pd.isna(ema60.iloc[-1]) else None,
+                            "ema120": round(ema120.iloc[-1], 2) if not pd.isna(ema120.iloc[-1]) else None,
+                            "ema200": round(ema200.iloc[-1], 2) if not pd.isna(ema200.iloc[-1]) else None,
+                            "sma20": round(sma20.iloc[-1], 2) if not pd.isna(sma20.iloc[-1]) else None,
+                            "sma60": round(sma60.iloc[-1], 2) if not pd.isna(sma60.iloc[-1]) else None,
+                        },
+                        "bollinger_bands": {
+                            "upper": round(bb["upper"].iloc[-1], 2),
+                            "middle": round(bb["middle"].iloc[-1], 2),
+                            "lower": round(bb["lower"].iloc[-1], 2),
+                            "width": round(bb["width"].iloc[-1], 4) if not pd.isna(bb["width"].iloc[-1]) else None,
+                            "position": round((close.iloc[-1] - bb["lower"].iloc[-1]) / (bb["upper"].iloc[-1] - bb["lower"].iloc[-1] + 1e-8), 2),
+                        },
+                        "oscillators": {
+                            "rsi_7": round(rsi_7.iloc[-1], 2) if not pd.isna(rsi_7.iloc[-1]) else None,
+                            "rsi_14": round(rsi_14.iloc[-1], 2) if not pd.isna(rsi_14.iloc[-1]) else None,
+                            "rsi_21": round(rsi_21.iloc[-1], 2) if not pd.isna(rsi_21.iloc[-1]) else None,
+                            "stoch_k": round(kd["k"].iloc[-1], 2) if not pd.isna(kd["k"].iloc[-1]) else None,
+                            "stoch_d": round(kd["d"].iloc[-1], 2) if not pd.isna(kd["d"].iloc[-1]) else None,
+                            "williams_r": round(williams_r.iloc[-1], 2) if not pd.isna(williams_r.iloc[-1]) else None,
+                            "cci": round(cci.iloc[-1], 2) if not pd.isna(cci.iloc[-1]) else None,
+                        },
+                        "macd": {
+                            "macd": round(macd_res["macd"].iloc[-1], 4) if not pd.isna(macd_res["macd"].iloc[-1]) else None,
+                            "signal": round(macd_res["signal"].iloc[-1], 4) if not pd.isna(macd_res["signal"].iloc[-1]) else None,
+                            "histogram": round(macd_res["histogram"].iloc[-1], 4) if not pd.isna(macd_res["histogram"].iloc[-1]) else None,
+                            "status": "bullish" if macd_res["histogram"].iloc[-1] > 0 else "bearish",
+                        },
+                        "trend_strength": {
+                            "adx": round(adx.iloc[-1], 2) if not pd.isna(adx.iloc[-1]) else None,
+                            "roc": round(roc.iloc[-1], 2) if not pd.isna(roc.iloc[-1]) else None,
+                        },
+                        "volatility": {
+                            "atr": round(atr.iloc[-1], 2) if not pd.isna(atr.iloc[-1]) else None,
+                            "atr_percent": round(atr_percent.iloc[-1], 2) if not pd.isna(atr_percent.iloc[-1]) else None,
+                        },
+                    },
+
+                    # 成交量分析
+                    "volume_analysis": {
+                        "current_volume": int(volume.iloc[-1]),
+                        "volume_sma20": int(vol_sma20.iloc[-1]) if not pd.isna(vol_sma20.iloc[-1]) else None,
+                        "volume_ratio": round(vol_rate.iloc[-1], 2) if not pd.isna(vol_rate.iloc[-1]) else None,
+                        "obv": int(obv.iloc[-1]),
+                        "obv_trend": "up" if obv.iloc[-1] > obv_ema.iloc[-1] else "down",
+                        "volume_status": self._get_volume_status_desc(vol_rate.iloc[-1] if not pd.isna(vol_rate.iloc[-1]) else 1.0),
+                    },
+
+                    # 支撐壓力位
+                    "support_resistance": {
+                        "pivot": round(pivot, 2),
+                        "resistance_1": round(r1, 2),
+                        "resistance_2": round(r2, 2),
+                        "resistance_3": round(r3, 2),
+                        "support_1": round(s1, 2),
+                        "support_2": round(s2, 2),
+                        "support_3": round(s3, 2),
+                        "recent_high_60d": round(recent_high, 2),
+                        "recent_low_60d": round(recent_low, 2),
+                    },
+
+                    # 多因子評分詳情
+                    "multi_factor_scores": factor_scores,
+
+                    # K線型態
+                    "pattern_recognition": pattern,
+
+                    # 風險指標
+                    "risk_metrics": risk_metrics,
+
+                    # 進出場策略
+                    "entry_exit_strategy": entry_exit,
+
+                    # 分析理由
                     "reasons": reasons,
-                    "recommendations": recommendations,
                 },
             }
 
         except Exception as e:
             return {"status": "error", "data": None, "message": f"交易訊號計算失敗: {str(e)}"}
+
+    def _check_ma_alignment(self, close: float, ema5: float, ema10: float, ema20: float, ema60: float) -> str:
+        """檢查均線排列"""
+        if close > ema5 > ema10 > ema20 > ema60:
+            return "perfect_bullish"  # 完美多頭排列
+        elif close > ema5 > ema10 > ema20:
+            return "bullish"  # 多頭排列
+        elif close < ema5 < ema10 < ema20 < ema60:
+            return "perfect_bearish"  # 完美空頭排列
+        elif close < ema5 < ema10 < ema20:
+            return "bearish"  # 空頭排列
+        else:
+            return "mixed"  # 糾結
+
+    def _check_trend_consistency(self, daily: str, weekly: str, monthly: str) -> str:
+        """檢查多時間框架趨勢一致性"""
+        trends = [daily, weekly, monthly]
+        up_count = trends.count("up")
+        if up_count == 3:
+            return "strong_uptrend"
+        elif up_count == 2:
+            return "moderate_uptrend"
+        elif up_count == 1:
+            return "moderate_downtrend"
+        else:
+            return "strong_downtrend"
+
+    def _calculate_trend_score(self, close: float, ema20: float, ema50: float, ema200: float,
+                               adx: float, weekly_trend: str, monthly_trend: str, ma_alignment: str) -> dict:
+        """計算趨勢因子評分"""
+        score = 0
+        reasons = []
+
+        # 價格與均線關係
+        if close > ema200:
+            score += 20
+            reasons.append("價格站上200日均線（長期多頭）")
+        else:
+            score -= 20
+            reasons.append("價格跌破200日均線（長期空頭）")
+
+        if close > ema50:
+            score += 15
+            reasons.append("價格站上50日均線（中期多頭）")
+        else:
+            score -= 15
+
+        if close > ema20:
+            score += 10
+            reasons.append("價格站上20日均線（短期多頭）")
+        else:
+            score -= 10
+
+        # 均線排列
+        if ma_alignment == "perfect_bullish":
+            score += 25
+            reasons.append("完美多頭排列")
+        elif ma_alignment == "bullish":
+            score += 15
+            reasons.append("多頭排列")
+        elif ma_alignment == "perfect_bearish":
+            score -= 25
+            reasons.append("完美空頭排列")
+        elif ma_alignment == "bearish":
+            score -= 15
+            reasons.append("空頭排列")
+
+        # ADX 趨勢強度
+        if adx > 25:
+            if score > 0:
+                score += 10
+                reasons.append(f"ADX={adx:.1f}，趨勢明確")
+            else:
+                score -= 10
+
+        # 多時間框架確認
+        if weekly_trend == "up" and monthly_trend == "up":
+            score += 15
+            reasons.append("週線月線同步向上")
+        elif weekly_trend == "down" and monthly_trend == "down":
+            score -= 15
+            reasons.append("週線月線同步向下")
+
+        return {"score": max(-100, min(100, score)), "reasons": reasons}
+
+    def _calculate_momentum_score(self, rsi: float, rsi_prev: float, macd: float, macd_signal: float,
+                                  macd_hist: float, macd_hist_prev: float, k: float, d: float,
+                                  k_prev: float, d_prev: float, williams_r: float, cci: float, roc: float) -> dict:
+        """計算動量因子評分"""
+        score = 0
+        reasons = []
+
+        # RSI 分析
+        if rsi < 30:
+            score += 20
+            reasons.append(f"RSI={rsi:.1f} 超賣區，反彈機會高")
+        elif rsi > 70:
+            score -= 20
+            reasons.append(f"RSI={rsi:.1f} 超買區，回檔風險高")
+        elif 40 <= rsi <= 60:
+            reasons.append(f"RSI={rsi:.1f} 中性區間")
+
+        # RSI 背離
+        if rsi > rsi_prev and rsi < 40:
+            score += 10
+            reasons.append("RSI 低檔向上翻揚")
+        elif rsi < rsi_prev and rsi > 60:
+            score -= 10
+            reasons.append("RSI 高檔向下翻轉")
+
+        # MACD 分析
+        if macd_hist > 0 and macd_hist > macd_hist_prev:
+            score += 20
+            reasons.append("MACD 柱狀圖正值且放大（多頭動能增強）")
+        elif macd_hist < 0 and macd_hist < macd_hist_prev:
+            score -= 20
+            reasons.append("MACD 柱狀圖負值且放大（空頭動能增強）")
+
+        # MACD 金叉死叉
+        if macd > macd_signal and macd_hist > 0 and macd_hist_prev <= 0:
+            score += 15
+            reasons.append("MACD 金叉確認")
+        elif macd < macd_signal and macd_hist < 0 and macd_hist_prev >= 0:
+            score -= 15
+            reasons.append("MACD 死叉確認")
+
+        # KD 分析
+        if k < 20 and k > d and k_prev <= d_prev:
+            score += 18
+            reasons.append("KD 低檔金叉（強力買訊）")
+        elif k > 80 and k < d and k_prev >= d_prev:
+            score -= 18
+            reasons.append("KD 高檔死叉（強力賣訊）")
+
+        # Williams %R
+        if williams_r < -80:
+            score += 8
+            reasons.append("Williams %R 超賣")
+        elif williams_r > -20:
+            score -= 8
+            reasons.append("Williams %R 超買")
+
+        # CCI
+        if cci < -100:
+            score += 8
+            reasons.append("CCI 超賣區")
+        elif cci > 100:
+            score -= 8
+            reasons.append("CCI 超買區")
+
+        # ROC
+        if roc > 5:
+            score += 5
+            reasons.append(f"ROC={roc:.1f}% 動能強勁")
+        elif roc < -5:
+            score -= 5
+            reasons.append(f"ROC={roc:.1f}% 動能衰弱")
+
+        return {"score": max(-100, min(100, score)), "reasons": reasons}
+
+    def _calculate_volatility_score(self, close: float, bb_upper: float, bb_middle: float, bb_lower: float,
+                                    bb_width: float, bb_width_avg: float, atr_percent: float) -> dict:
+        """計算波動率/布林因子評分"""
+        score = 0
+        reasons = []
+
+        # 布林通道位置
+        bb_position = (close - bb_lower) / (bb_upper - bb_lower + 1e-8)
+
+        if bb_position < 0.1:
+            score += 20
+            reasons.append("價格觸及布林下軌（超賣反彈機會）")
+        elif bb_position > 0.9:
+            score -= 20
+            reasons.append("價格觸及布林上軌（超買回檔風險）")
+        elif 0.4 <= bb_position <= 0.6:
+            reasons.append("價格位於布林通道中軌附近")
+
+        # 布林通道寬度變化（收窄後擴張是突破訊號）
+        width_ratio = bb_width / bb_width_avg if bb_width_avg > 0 else 1
+
+        if width_ratio < 0.7:
+            score += 10
+            reasons.append("布林通道收窄（醞釀突破）")
+        elif width_ratio > 1.5:
+            if bb_position > 0.7:
+                score += 15
+                reasons.append("布林通道擴張向上突破")
+            elif bb_position < 0.3:
+                score -= 15
+                reasons.append("布林通道擴張向下突破")
+
+        # ATR 波動率
+        if atr_percent > 5:
+            reasons.append(f"ATR%={atr_percent:.1f}% 高波動（風險較高）")
+        elif atr_percent < 1.5:
+            reasons.append(f"ATR%={atr_percent:.1f}% 低波動")
+
+        return {"score": max(-100, min(100, score)), "reasons": reasons}
+
+    def _calculate_volume_score(self, volume: int, vol_sma20: float, vol_rate: float,
+                                obv: float, obv_ema: float, price_change: float) -> dict:
+        """計算成交量因子評分"""
+        score = 0
+        reasons = []
+
+        # 量比分析
+        if vol_rate > 2.0:
+            if price_change > 0:
+                score += 25
+                reasons.append(f"爆量上漲（量比={vol_rate:.1f}），多頭強勢")
+            else:
+                score -= 15
+                reasons.append(f"爆量下跌（量比={vol_rate:.1f}），可能出貨")
+        elif vol_rate > 1.5:
+            if price_change > 0:
+                score += 15
+                reasons.append(f"量增價漲（量比={vol_rate:.1f}）")
+            else:
+                score -= 10
+                reasons.append(f"量增價跌（量比={vol_rate:.1f}）")
+        elif vol_rate < 0.5:
+            score -= 5
+            reasons.append(f"量能萎縮（量比={vol_rate:.1f}）")
+
+        # OBV 趨勢
+        if obv > obv_ema:
+            score += 10
+            reasons.append("OBV 向上（資金流入）")
+        else:
+            score -= 10
+            reasons.append("OBV 向下（資金流出）")
+
+        return {"score": max(-100, min(100, score)), "reasons": reasons}
+
+    def _calculate_price_position_score(self, close: float, recent_high: float, recent_low: float,
+                                        pivot: float, r1: float, s1: float) -> dict:
+        """計算價格位置因子評分"""
+        score = 0
+        reasons = []
+
+        # 相對位置
+        price_range = recent_high - recent_low
+        if price_range > 0:
+            position_percent = (close - recent_low) / price_range * 100
+
+            if position_percent > 90:
+                score -= 15
+                reasons.append(f"價格位於近期高點附近（{position_percent:.0f}%），追高風險")
+            elif position_percent < 10:
+                score += 15
+                reasons.append(f"價格位於近期低點附近（{position_percent:.0f}%），逢低機會")
+            elif 40 <= position_percent <= 60:
+                reasons.append(f"價格位於近期區間中部（{position_percent:.0f}%）")
+
+        # 支撐壓力分析
+        if close > r1:
+            score += 10
+            reasons.append("價格突破第一壓力位")
+        elif close < s1:
+            score -= 10
+            reasons.append("價格跌破第一支撐位")
+        elif close > pivot:
+            score += 5
+            reasons.append("價格站上樞紐點")
+        else:
+            score -= 5
+            reasons.append("價格位於樞紐點下方")
+
+        return {"score": max(-100, min(100, score)), "reasons": reasons}
+
+    def _determine_overall_signal(self, total_score: float, factor_scores: dict) -> tuple:
+        """根據總分決定整體訊號"""
+        # 計算因子一致性
+        positive_factors = sum(1 for f in factor_scores.values() if f["score"] > 10)
+        negative_factors = sum(1 for f in factor_scores.values() if f["score"] < -10)
+
+        if total_score >= 50:
+            signal = "strong_buy"
+            confidence = "high" if positive_factors >= 4 else "medium"
+            desc = "強烈買進訊號，多項指標同步看多"
+        elif total_score >= 25:
+            signal = "buy"
+            confidence = "medium" if positive_factors >= 3 else "low"
+            desc = "偏多操作，可分批布局"
+        elif total_score <= -50:
+            signal = "strong_sell"
+            confidence = "high" if negative_factors >= 4 else "medium"
+            desc = "強烈賣出訊號，多項指標同步看空"
+        elif total_score <= -25:
+            signal = "sell"
+            confidence = "medium" if negative_factors >= 3 else "low"
+            desc = "偏空操作，建議減碼或觀望"
+        else:
+            signal = "neutral"
+            confidence = "low"
+            desc = "觀望為主，等待更明確訊號"
+
+        return signal, confidence, desc
+
+    def _identify_candlestick_pattern(self, open_prices: np.ndarray, high_prices: np.ndarray,
+                                      low_prices: np.ndarray, close_prices: np.ndarray) -> dict:
+        """識別K線型態"""
+        patterns = []
+
+        if len(close_prices) < 3:
+            return {"patterns": patterns, "signal": "none"}
+
+        # 最近一根K線
+        body = close_prices[-1] - open_prices[-1]
+        upper_shadow = high_prices[-1] - max(open_prices[-1], close_prices[-1])
+        lower_shadow = min(open_prices[-1], close_prices[-1]) - low_prices[-1]
+        body_size = abs(body)
+        total_range = high_prices[-1] - low_prices[-1]
+
+        # 錘子線/吊人線
+        if lower_shadow > body_size * 2 and upper_shadow < body_size * 0.5 and total_range > 0:
+            if close_prices[-1] < close_prices[-2]:  # 下跌趨勢後
+                patterns.append({"name": "hammer", "signal": "bullish", "description": "錘子線（反轉買訊）"})
+            else:
+                patterns.append({"name": "hanging_man", "signal": "bearish", "description": "吊人線（反轉賣訊）"})
+
+        # 倒錘子線/射擊之星
+        if upper_shadow > body_size * 2 and lower_shadow < body_size * 0.5 and total_range > 0:
+            if close_prices[-1] < close_prices[-2]:
+                patterns.append({"name": "inverted_hammer", "signal": "bullish", "description": "倒錘子線"})
+            else:
+                patterns.append({"name": "shooting_star", "signal": "bearish", "description": "射擊之星（反轉賣訊）"})
+
+        # 十字星
+        if body_size < total_range * 0.1 and total_range > 0:
+            patterns.append({"name": "doji", "signal": "neutral", "description": "十字星（猶豫訊號）"})
+
+        # 吞噬型態
+        if len(close_prices) >= 2:
+            prev_body = close_prices[-2] - open_prices[-2]
+            curr_body = close_prices[-1] - open_prices[-1]
+
+            if prev_body < 0 and curr_body > 0 and abs(curr_body) > abs(prev_body):
+                if open_prices[-1] <= close_prices[-2] and close_prices[-1] >= open_prices[-2]:
+                    patterns.append({"name": "bullish_engulfing", "signal": "bullish", "description": "多頭吞噬（強力買訊）"})
+
+            if prev_body > 0 and curr_body < 0 and abs(curr_body) > abs(prev_body):
+                if open_prices[-1] >= close_prices[-2] and close_prices[-1] <= open_prices[-2]:
+                    patterns.append({"name": "bearish_engulfing", "signal": "bearish", "description": "空頭吞噬（強力賣訊）"})
+
+        # 判斷整體型態訊號
+        bullish_count = sum(1 for p in patterns if p["signal"] == "bullish")
+        bearish_count = sum(1 for p in patterns if p["signal"] == "bearish")
+
+        if bullish_count > bearish_count:
+            overall_signal = "bullish"
+        elif bearish_count > bullish_count:
+            overall_signal = "bearish"
+        else:
+            overall_signal = "neutral"
+
+        return {"patterns": patterns, "signal": overall_signal}
+
+    def _calculate_entry_exit_strategy(self, close: float, atr: float, signal: str,
+                                       s1: float, s2: float, r1: float, r2: float,
+                                       recent_high: float, recent_low: float) -> dict:
+        """計算進出場策略"""
+        strategy = {}
+
+        if signal in ["strong_buy", "buy"]:
+            strategy["action"] = "買進"
+            strategy["entry_price"] = round(close, 2)
+            strategy["stop_loss"] = round(max(close - 2 * atr, s1), 2)
+            strategy["stop_loss_percent"] = round((close - strategy["stop_loss"]) / close * 100, 2)
+            strategy["target_1"] = round(min(close + 1.5 * atr, r1), 2)
+            strategy["target_2"] = round(min(close + 3 * atr, r2), 2)
+            strategy["risk_reward_ratio"] = round((strategy["target_1"] - close) / (close - strategy["stop_loss"]), 2) if close > strategy["stop_loss"] else 0
+            strategy["position_suggestion"] = "建議分批進場，首次進場 1/3 倉位"
+        elif signal in ["strong_sell", "sell"]:
+            strategy["action"] = "賣出/放空"
+            strategy["entry_price"] = round(close, 2)
+            strategy["stop_loss"] = round(min(close + 2 * atr, r1), 2)
+            strategy["stop_loss_percent"] = round((strategy["stop_loss"] - close) / close * 100, 2)
+            strategy["target_1"] = round(max(close - 1.5 * atr, s1), 2)
+            strategy["target_2"] = round(max(close - 3 * atr, s2), 2)
+            strategy["risk_reward_ratio"] = round((close - strategy["target_1"]) / (strategy["stop_loss"] - close), 2) if strategy["stop_loss"] > close else 0
+            strategy["position_suggestion"] = "建議減碼或分批放空"
+        else:
+            strategy["action"] = "觀望"
+            strategy["entry_price"] = None
+            strategy["stop_loss"] = None
+            strategy["target_1"] = None
+            strategy["target_2"] = None
+            strategy["position_suggestion"] = "等待更明確訊號再進場"
+
+        strategy["key_levels"] = {
+            "nearest_support": round(s1, 2),
+            "nearest_resistance": round(r1, 2),
+            "strong_support": round(recent_low, 2),
+            "strong_resistance": round(recent_high, 2),
+        }
+
+        return strategy
+
+    def _calculate_risk_metrics(self, close: pd.Series, atr: float, atr_percent: float, adx: float, bb_width: float) -> dict:
+        """計算風險指標"""
+        # 計算最近的波動率
+        returns = close.pct_change().dropna()
+        volatility_20d = returns.tail(20).std() * np.sqrt(252) * 100 if len(returns) >= 20 else 0
+
+        # 計算最大回撤
+        rolling_max = close.expanding().max()
+        drawdown = (close - rolling_max) / rolling_max
+        max_drawdown = abs(drawdown.min()) * 100
+
+        # 風險等級評估
+        risk_score = 0
+        if atr_percent > 4:
+            risk_score += 2
+        elif atr_percent > 2.5:
+            risk_score += 1
+
+        if volatility_20d > 40:
+            risk_score += 2
+        elif volatility_20d > 25:
+            risk_score += 1
+
+        if adx > 40:
+            risk_score += 1  # 趨勢明確但波動大
+
+        if risk_score >= 4:
+            risk_level = "high"
+        elif risk_score >= 2:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+
+        return {
+            "risk_level": risk_level,
+            "volatility_20d": round(volatility_20d, 2),
+            "max_drawdown_percent": round(max_drawdown, 2),
+            "atr_percent": round(atr_percent, 2),
+            "suggested_position_size": "小倉位" if risk_level == "high" else ("中倉位" if risk_level == "medium" else "正常倉位"),
+        }
+
+    def _get_volume_status_desc(self, vol_rate: float) -> str:
+        """獲取成交量狀態描述"""
+        if vol_rate >= 2.5:
+            return "爆量"
+        elif vol_rate >= 1.5:
+            return "量增"
+        elif vol_rate >= 0.8:
+            return "正常"
+        elif vol_rate >= 0.5:
+            return "量縮"
+        else:
+            return "極度萎縮"
 
     def query_symbol_snapshot(self, args: Dict) -> Dict[str, Any]:
         """查詢股票快照報價
@@ -2609,18 +3255,23 @@ class MarketDataService:
 
     def get_market_overview(self) -> dict:
         """
-        獲取台灣股市整體概況
+        獲取台灣股市整體概況（量化交易增強版）
 
-        整合台股指數行情、漲跌家數統計、成交量統計等市場整體資訊。
+        整合台股指數行情、漲跌家數統計、成交量統計、市場廣度指標、
+        趨勢判斷等量化交易者需要的市場整體資訊。
 
         Returns:
             dict: 成功時返回市場概況數據，包含：
-                - index: 台股指數資訊 (名稱、代碼、價格、漲跌、成交量等)
+                - index: 台股指數資訊 (名稱、代碼、價格、漲跌、成交量、開高低等)
                 - statistics: 市場統計數據 (上漲/下跌家數、總成交量、市場狀態)
+                - breadth: 市場廣度指標 (漲跌比、ADL、市場強度)
+                - volume_analysis: 成交量分析 (量能狀態、量比、大戶動向)
+                - trend: 趨勢指標 (短中長期趨勢、趨勢強度)
+                - sentiment: 市場情緒指標 (恐懼貪婪指數、多空比)
+                - signals: 量化交易訊號 (建議操作、信心度)
         """
         try:
             # 獲取台股指數行情
-            # 嘗試使用 intraday.quote 查詢指數，如果失败則退回到 ticker
             tse_result = None
             try:
                 tse_result = self.reststock.intraday.quote(symbol="IX0001")
@@ -2641,81 +3292,287 @@ class MarketDataService:
                     "message": "無法獲取台股指數行情",
                 }
 
-            # 獲取市場統計數據
-            try:
-                movers_result = self.reststock.snapshot.movers(
-                    market="TSE", direction="up", change="value", gt=0, type="COMMONSTOCK"
-                )
-                up_count = len(movers_result.data) if movers_result and hasattr(movers_result, "data") else 0
-            except Exception:
-                up_count = 0
-
-            try:
-                movers_result = self.reststock.snapshot.movers(
-                    market="TSE", direction="down", change="value", lt=0, type="COMMONSTOCK"
-                )
-                down_count = len(movers_result.data) if movers_result and hasattr(movers_result, "data") else 0
-            except Exception:
-                down_count = 0
-
-            # 獲取成交量統計
-            try:
-                actives_result = self.reststock.snapshot.actives(market="TSE", trade="volume", type="COMMONSTOCK")
-
-                # 嘗試從返回的 data 取得 trade volume，字段名稱可能為 trade_volume 或 tradeVolume
-                def _get_trade_volume(item):
-                    if isinstance(item, dict):
-                        return item.get("trade_volume") or item.get("tradeVolume") or item.get("trade_volume") or 0
-                    else:
-                        return getattr(item, "trade_volume", None) or getattr(item, "tradeVolume", None) or 0
-
-                total_volume = (
-                    sum(
-                        _get_trade_volume(item)
-                        for item in (actives_result.data[:10] if hasattr(actives_result, "data") else [])
-                    )
-                    if actives_result and hasattr(actives_result, "data")
-                    else 0
-                )
-            except Exception:
-                total_volume = 0
-
+            # 解析指數數據
             index_data = self._normalize_result(tse_result.data if hasattr(tse_result, "data") else tse_result)
-            price = index_data.get("price") or index_data.get("close") or 0
-            change = index_data.get("change") or index_data.get("chg") or 0
-            change_percent = (
+
+            # 提取指數關鍵價格
+            price = float(index_data.get("price") or index_data.get("close") or index_data.get("lastPrice") or 0)
+            open_price = float(index_data.get("open") or index_data.get("openPrice") or 0)
+            high_price = float(index_data.get("high") or index_data.get("highPrice") or 0)
+            low_price = float(index_data.get("low") or index_data.get("lowPrice") or 0)
+            prev_close = float(index_data.get("previousClose") or index_data.get("referencePrice") or index_data.get("prevClose") or 0)
+            change = float(index_data.get("change") or index_data.get("chg") or 0)
+            change_percent = float(
                 index_data.get("change_percent") or index_data.get("chg_percent") or index_data.get("changePercent") or 0
             )
-            volume_val = 0
-            # 有時 total 會是一個 dict
-            if isinstance(index_data.get("total"), dict):
-                volume_val = index_data.get("total", {}).get("trade_volume", 0)
-            else:
-                volume_val = index_data.get("trade_volume") or index_data.get("tradeVolume") or 0
 
+            # 獲取成交量
+            volume_val = 0
+            if isinstance(index_data.get("total"), dict):
+                volume_val = int(index_data.get("total", {}).get("trade_volume", 0) or index_data.get("total", {}).get("tradeVolume", 0) or 0)
+            else:
+                volume_val = int(index_data.get("trade_volume") or index_data.get("tradeVolume") or index_data.get("volume") or 0)
+
+            trade_value = 0
+            if isinstance(index_data.get("total"), dict):
+                trade_value = float(index_data.get("total", {}).get("trade_value", 0) or index_data.get("total", {}).get("tradeValue", 0) or 0)
+            else:
+                trade_value = float(index_data.get("trade_value") or index_data.get("tradeValue") or 0)
+
+            # === 獲取上漲/下跌股票數據（含詳細資訊）===
+            up_stocks = []
+            down_stocks = []
+            up_count = 0
+            down_count = 0
+
+            # 上漲股票（使用漲跌幅排序）
+            try:
+                movers_up = self.reststock.snapshot.movers(
+                    market="TSE", direction="up", change="percent", type="COMMONSTOCK"
+                )
+                if movers_up:
+                    if isinstance(movers_up, dict) and "data" in movers_up:
+                        up_stocks = movers_up["data"]
+                    elif hasattr(movers_up, "data"):
+                        up_stocks = movers_up.data if movers_up.data else []
+                    up_count = len(up_stocks)
+            except Exception:
+                up_count = 0
+                up_stocks = []
+
+            # 下跌股票
+            try:
+                movers_down = self.reststock.snapshot.movers(
+                    market="TSE", direction="down", change="percent", type="COMMONSTOCK"
+                )
+                if movers_down:
+                    if isinstance(movers_down, dict) and "data" in movers_down:
+                        down_stocks = movers_down["data"]
+                    elif hasattr(movers_down, "data"):
+                        down_stocks = movers_down.data if movers_down.data else []
+                    down_count = len(down_stocks)
+            except Exception:
+                down_count = 0
+                down_stocks = []
+
+            # === 獲取成交量排行（分析大戶動向）===
+            volume_leaders = []
+            total_market_volume = 0
+            try:
+                actives_result = self.reststock.snapshot.actives(market="TSE", trade="volume", type="COMMONSTOCK")
+                if actives_result:
+                    if isinstance(actives_result, dict) and "data" in actives_result:
+                        volume_leaders = actives_result["data"][:20] if actives_result["data"] else []
+                    elif hasattr(actives_result, "data") and actives_result.data:
+                        volume_leaders = list(actives_result.data)[:20]
+
+                    # 計算前20大成交量總和
+                    for item in volume_leaders:
+                        if isinstance(item, dict):
+                            vol = item.get("tradeVolume") or item.get("trade_volume") or 0
+                        else:
+                            vol = getattr(item, "tradeVolume", None) or getattr(item, "trade_volume", 0)
+                        total_market_volume += int(vol)
+            except Exception:
+                volume_leaders = []
+
+            # === 獲取成交值排行 ===
+            value_leaders = []
+            total_market_value = 0
+            try:
+                actives_value = self.reststock.snapshot.actives(market="TSE", trade="value", type="COMMONSTOCK")
+                if actives_value:
+                    if isinstance(actives_value, dict) and "data" in actives_value:
+                        value_leaders = actives_value["data"][:20] if actives_value["data"] else []
+                    elif hasattr(actives_value, "data") and actives_value.data:
+                        value_leaders = list(actives_value.data)[:20]
+
+                    for item in value_leaders:
+                        if isinstance(item, dict):
+                            val = item.get("tradeValue") or item.get("trade_value") or 0
+                        else:
+                            val = getattr(item, "tradeValue", None) or getattr(item, "trade_value", 0)
+                        total_market_value += float(val)
+            except Exception:
+                value_leaders = []
+
+            # === 計算市場廣度指標 ===
+            total_stocks = up_count + down_count
+            if total_stocks == 0:
+                total_stocks = 1  # 避免除以零
+
+            # 漲跌比 (Advance/Decline Ratio)
+            ad_ratio = up_count / down_count if down_count > 0 else (float('inf') if up_count > 0 else 1.0)
+
+            # 漲跌線 (ADL - Advance/Decline Line) - 簡化計算
+            adl_value = up_count - down_count
+
+            # 市場寬度 (Market Breadth) - 上漲股票佔比
+            market_breadth = up_count / total_stocks
+
+            # 上漲強度分析（計算平均漲跌幅）
+            avg_up_pct = 0
+            avg_down_pct = 0
+
+            if up_stocks:
+                up_pcts = []
+                for stock in up_stocks[:50]:  # 取前50檔計算
+                    if isinstance(stock, dict):
+                        pct = stock.get("changePercent") or stock.get("change_percent") or 0
+                    else:
+                        pct = getattr(stock, "changePercent", None) or getattr(stock, "change_percent", 0)
+                    up_pcts.append(float(pct))
+                avg_up_pct = sum(up_pcts) / len(up_pcts) if up_pcts else 0
+
+            if down_stocks:
+                down_pcts = []
+                for stock in down_stocks[:50]:
+                    if isinstance(stock, dict):
+                        pct = stock.get("changePercent") or stock.get("change_percent") or 0
+                    else:
+                        pct = getattr(stock, "changePercent", None) or getattr(stock, "change_percent", 0)
+                    down_pcts.append(abs(float(pct)))
+                avg_down_pct = sum(down_pcts) / len(down_pcts) if down_pcts else 0
+
+            # 漲停/跌停數量
+            limit_up_count = sum(1 for s in up_stocks if self._is_limit_up(s))
+            limit_down_count = sum(1 for s in down_stocks if self._is_limit_down(s))
+
+            # === 計算趨勢指標 ===
+            # 日內趨勢判斷
+            intraday_trend = "盤整"
+            trend_strength = 0
+
+            if price > 0 and open_price > 0:
+                day_range = high_price - low_price if high_price > low_price else 0.01
+                price_position = (price - low_price) / day_range if day_range > 0 else 0.5
+
+                if price > open_price:
+                    if price_position > 0.7:
+                        intraday_trend = "強勢上漲"
+                        trend_strength = 80 + (price_position - 0.7) * 66
+                    else:
+                        intraday_trend = "上漲"
+                        trend_strength = 50 + price_position * 30
+                elif price < open_price:
+                    if price_position < 0.3:
+                        intraday_trend = "強勢下跌"
+                        trend_strength = -(80 + (0.3 - price_position) * 66)
+                    else:
+                        intraday_trend = "下跌"
+                        trend_strength = -(50 + (1 - price_position) * 30)
+                else:
+                    intraday_trend = "盤整"
+                    trend_strength = 0
+
+            # === 計算市場情緒指標 ===
+            # 多空比
+            bull_bear_ratio = ad_ratio if ad_ratio != float('inf') else 10.0
+
+            # 恐懼貪婪指數（0-100，50為中性）
+            fear_greed_index = self._calculate_fear_greed(
+                ad_ratio=ad_ratio,
+                market_breadth=market_breadth,
+                avg_up_pct=avg_up_pct,
+                avg_down_pct=avg_down_pct,
+                limit_up_count=limit_up_count,
+                limit_down_count=limit_down_count,
+                change_percent=change_percent
+            )
+
+            # 情緒等級
+            sentiment_level = self._get_sentiment_level(fear_greed_index)
+
+            # === 量化交易訊號 ===
+            signal_score = self._calculate_market_signal_score(
+                change_percent=change_percent,
+                ad_ratio=ad_ratio,
+                market_breadth=market_breadth,
+                fear_greed_index=fear_greed_index,
+                trend_strength=trend_strength
+            )
+
+            signal_action = self._get_signal_action(signal_score)
+            signal_confidence = min(abs(signal_score), 100)
+
+            # === 判斷市場狀態 ===
+            # 根據時間和交易狀況判斷市場是否開盤
+            market_status = "closed"
+            if price > 0 and (up_count > 0 or down_count > 0):
+                market_status = "open"
+            elif price > 0:
+                # 有價格但無漲跌家數，可能是盤前/盤後
+                market_status = "pre_market" if volume_val == 0 else "after_hours"
+
+            # === 組裝返回數據 ===
             market_data = {
                 "index": {
-                    "name": index_data.get("name", "台股指數"),
+                    "name": index_data.get("name", "發行量加權股價指數"),
                     "symbol": index_data.get("symbol", "IX0001"),
-                    "price": float(price),
-                    "change": float(change),
-                    "change_percent": float(change_percent),
-                    "volume": int(volume_val),
-                    "last_updated": index_data.get("at") or index_data.get("updated_at"),
+                    "price": price,
+                    "open": open_price,
+                    "high": high_price,
+                    "low": low_price,
+                    "prev_close": prev_close,
+                    "change": change,
+                    "change_percent": change_percent,
+                    "volume": volume_val,
+                    "trade_value": trade_value,
+                    "last_updated": index_data.get("at") or index_data.get("updated_at") or index_data.get("lastUpdated"),
                 },
                 "statistics": {
                     "up_count": up_count,
                     "down_count": down_count,
                     "unchanged_count": max(0, 1000 - up_count - down_count),  # 估計值
-                    "total_volume": total_volume,
-                    "market_status": "open" if float(price) > 0 else "closed",
+                    "limit_up_count": limit_up_count,
+                    "limit_down_count": limit_down_count,
+                    "total_volume": total_market_volume,
+                    "total_value": total_market_value,
+                    "market_status": market_status,
+                },
+                "breadth": {
+                    "advance_decline_ratio": round(ad_ratio, 2) if ad_ratio != float('inf') else "無限大",
+                    "advance_decline_line": adl_value,
+                    "market_breadth": round(market_breadth * 100, 2),  # 百分比
+                    "avg_up_percent": round(avg_up_pct, 2),
+                    "avg_down_percent": round(avg_down_pct, 2),
+                    "breadth_strength": "強勢" if market_breadth > 0.6 else ("弱勢" if market_breadth < 0.4 else "中性"),
+                },
+                "volume_analysis": {
+                    "volume_status": self._get_volume_status(volume_val, trade_value),
+                    "top_volume_concentration": round(total_market_volume / max(volume_val, 1) * 100, 2) if volume_val > 0 else 0,
+                    "top_value_concentration": round(total_market_value / max(trade_value, 1) * 100, 2) if trade_value > 0 else 0,
+                    "large_cap_activity": "活躍" if len(value_leaders) > 10 else "低迷",
+                },
+                "trend": {
+                    "intraday_trend": intraday_trend,
+                    "trend_strength": round(trend_strength, 1),
+                    "price_position": "高檔" if price > open_price * 1.01 else ("低檔" if price < open_price * 0.99 else "平盤附近"),
+                    "volatility": round(((high_price - low_price) / open_price * 100) if open_price > 0 else 0, 2),
+                },
+                "sentiment": {
+                    "fear_greed_index": round(fear_greed_index, 1),
+                    "sentiment_level": sentiment_level,
+                    "bull_bear_ratio": round(bull_bear_ratio, 2) if bull_bear_ratio < 100 else ">100",
+                    "market_mood": self._get_market_mood(fear_greed_index, change_percent),
+                },
+                "signals": {
+                    "action": signal_action,
+                    "score": round(signal_score, 1),
+                    "confidence": round(signal_confidence, 1),
+                    "reasoning": self._get_signal_reasoning(
+                        change_percent=change_percent,
+                        ad_ratio=ad_ratio,
+                        market_breadth=market_breadth,
+                        fear_greed_index=fear_greed_index
+                    ),
                 },
             }
 
             return {
                 "status": "success",
                 "data": market_data,
-                "message": "成功獲取台灣股市整體概況",
+                "message": "成功獲取台灣股市整體概況（量化分析版）",
             }
         except Exception as e:
             return {
@@ -2723,6 +3580,201 @@ class MarketDataService:
                 "data": None,
                 "message": f"獲取市場概況時發生錯誤: {str(e)}",
             }
+
+    def _is_limit_up(self, stock) -> bool:
+        """判斷是否漲停"""
+        if isinstance(stock, dict):
+            change_pct = stock.get("changePercent") or stock.get("change_percent") or 0
+        else:
+            change_pct = getattr(stock, "changePercent", None) or getattr(stock, "change_percent", 0)
+        return float(change_pct) >= 9.5  # 台股漲停約10%
+
+    def _is_limit_down(self, stock) -> bool:
+        """判斷是否跌停"""
+        if isinstance(stock, dict):
+            change_pct = stock.get("changePercent") or stock.get("change_percent") or 0
+        else:
+            change_pct = getattr(stock, "changePercent", None) or getattr(stock, "change_percent", 0)
+        return float(change_pct) <= -9.5
+
+    def _calculate_fear_greed(self, ad_ratio: float, market_breadth: float, avg_up_pct: float,
+                              avg_down_pct: float, limit_up_count: int, limit_down_count: int,
+                              change_percent: float) -> float:
+        """計算恐懼貪婪指數（0-100）"""
+        score = 50  # 基準值
+
+        # 漲跌比貢獻 (±15)
+        if ad_ratio != float('inf'):
+            if ad_ratio > 2:
+                score += 15
+            elif ad_ratio > 1.5:
+                score += 10
+            elif ad_ratio > 1:
+                score += 5
+            elif ad_ratio < 0.5:
+                score -= 15
+            elif ad_ratio < 0.67:
+                score -= 10
+            elif ad_ratio < 1:
+                score -= 5
+
+        # 市場寬度貢獻 (±10)
+        if market_breadth > 0.7:
+            score += 10
+        elif market_breadth > 0.6:
+            score += 5
+        elif market_breadth < 0.3:
+            score -= 10
+        elif market_breadth < 0.4:
+            score -= 5
+
+        # 平均漲跌幅強度 (±10)
+        strength_diff = avg_up_pct - avg_down_pct
+        if strength_diff > 2:
+            score += 10
+        elif strength_diff > 1:
+            score += 5
+        elif strength_diff < -2:
+            score -= 10
+        elif strength_diff < -1:
+            score -= 5
+
+        # 漲跌停貢獻 (±10)
+        limit_diff = limit_up_count - limit_down_count
+        if limit_diff > 20:
+            score += 10
+        elif limit_diff > 10:
+            score += 5
+        elif limit_diff < -20:
+            score -= 10
+        elif limit_diff < -10:
+            score -= 5
+
+        # 指數漲跌幅貢獻 (±5)
+        if change_percent > 1:
+            score += 5
+        elif change_percent > 0.5:
+            score += 2
+        elif change_percent < -1:
+            score -= 5
+        elif change_percent < -0.5:
+            score -= 2
+
+        return max(0, min(100, score))
+
+    def _get_sentiment_level(self, fear_greed_index: float) -> str:
+        """獲取情緒等級"""
+        if fear_greed_index >= 80:
+            return "極度貪婪"
+        elif fear_greed_index >= 60:
+            return "貪婪"
+        elif fear_greed_index >= 45:
+            return "中性"
+        elif fear_greed_index >= 25:
+            return "恐懼"
+        else:
+            return "極度恐懼"
+
+    def _get_volume_status(self, volume: int, value: float) -> str:
+        """獲取量能狀態"""
+        # 這裡可以根據歷史平均成交量來比較，目前簡化處理
+        if value > 200000000000:  # 2000億以上
+            return "量能充沛"
+        elif value > 150000000000:  # 1500億以上
+            return "量能正常"
+        elif value > 100000000000:  # 1000億以上
+            return "量能偏低"
+        else:
+            return "量能萎縮"
+
+    def _calculate_market_signal_score(self, change_percent: float, ad_ratio: float,
+                                       market_breadth: float, fear_greed_index: float,
+                                       trend_strength: float) -> float:
+        """計算市場訊號分數（-100 到 +100）"""
+        score = 0
+
+        # 指數漲跌幅貢獻 (±25)
+        score += change_percent * 10
+        score = max(-25, min(25, score))
+
+        # 漲跌比貢獻 (±25)
+        if ad_ratio != float('inf'):
+            ratio_score = (ad_ratio - 1) * 20
+            score += max(-25, min(25, ratio_score))
+
+        # 市場寬度貢獻 (±20)
+        breadth_score = (market_breadth - 0.5) * 40
+        score += max(-20, min(20, breadth_score))
+
+        # 恐懼貪婪指數貢獻 (±15)
+        fg_score = (fear_greed_index - 50) * 0.3
+        score += max(-15, min(15, fg_score))
+
+        # 趨勢強度貢獻 (±15)
+        score += trend_strength * 0.15
+
+        return max(-100, min(100, score))
+
+    def _get_signal_action(self, score: float) -> str:
+        """獲取交易訊號建議"""
+        if score >= 50:
+            return "強烈看多"
+        elif score >= 25:
+            return "偏多操作"
+        elif score >= 10:
+            return "謹慎偏多"
+        elif score >= -10:
+            return "觀望"
+        elif score >= -25:
+            return "謹慎偏空"
+        elif score >= -50:
+            return "偏空操作"
+        else:
+            return "強烈看空"
+
+    def _get_market_mood(self, fear_greed_index: float, change_percent: float) -> str:
+        """獲取市場氛圍描述"""
+        if fear_greed_index >= 70 and change_percent > 0.5:
+            return "亢奮追漲"
+        elif fear_greed_index >= 60:
+            return "樂觀進取"
+        elif fear_greed_index <= 30 and change_percent < -0.5:
+            return "恐慌殺跌"
+        elif fear_greed_index <= 40:
+            return "悲觀保守"
+        else:
+            return "理性觀望"
+
+    def _get_signal_reasoning(self, change_percent: float, ad_ratio: float,
+                              market_breadth: float, fear_greed_index: float) -> List[str]:
+        """獲取訊號理由"""
+        reasons = []
+
+        if change_percent > 1:
+            reasons.append("指數強勢上漲")
+        elif change_percent < -1:
+            reasons.append("指數明顯下跌")
+
+        if ad_ratio != float('inf'):
+            if ad_ratio > 2:
+                reasons.append("漲跌比極佳，多頭佔優")
+            elif ad_ratio < 0.5:
+                reasons.append("漲跌比極差，空頭主導")
+
+        if market_breadth > 0.7:
+            reasons.append("市場普漲，廣度良好")
+        elif market_breadth < 0.3:
+            reasons.append("市場普跌，廣度惡化")
+
+        if fear_greed_index >= 75:
+            reasons.append("情緒過熱，注意回調風險")
+        elif fear_greed_index <= 25:
+            reasons.append("情緒極度悲觀，可能超跌")
+
+        if not reasons:
+            reasons.append("市場表現中性，建議觀望")
+
+        return reasons
 
     def _bb_position(self, close: float, upper: float, middle: float, lower: float) -> str:
         if close > upper:

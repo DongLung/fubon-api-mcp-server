@@ -342,25 +342,82 @@ class TestMarketDataServiceMock:
         assert "成功獲取合約 TX00 即時報價" in result["message"]
 
     def test_get_trading_signals_success(self, market_data_service):
-        """測試獲取交易訊號成功"""
+        """測試獲取交易訊號成功（量化交易增強版）"""
         # 模擬本地數據 - 需要足夠的數據點來計算指標
         mock_df = pd.DataFrame(
             {
-                "date": pd.date_range("2024-01-01", periods=50),
-                "close": [100 + i + np.sin(i / 10) * 5 for i in range(50)],
-                "high": [105 + i + np.sin(i / 10) * 5 for i in range(50)],
-                "low": [95 + i + np.sin(i / 10) * 5 for i in range(50)],
-                "volume": [1000 + i * 100 for i in range(50)],
+                "date": pd.date_range("2024-01-01", periods=100),
+                "open": [100 + i + np.sin(i / 10) * 4 for i in range(100)],
+                "close": [100 + i + np.sin(i / 10) * 5 for i in range(100)],
+                "high": [105 + i + np.sin(i / 10) * 5 for i in range(100)],
+                "low": [95 + i + np.sin(i / 10) * 5 for i in range(100)],
+                "volume": [1000000 + i * 10000 for i in range(100)],
             }
         )
 
         with patch.object(market_data_service, "_read_local_stock_data", return_value=mock_df):
-            result = market_data_service.get_trading_signals({"symbol": "2330"})
+            with patch.object(market_data_service, "_ensure_fresh_data", return_value=None):
+                result = market_data_service.get_trading_signals({"symbol": "2330"})
 
         assert result["status"] == "success"
-        assert "symbol" in result["data"]
-        assert "overall_signal" in result["data"]
-        assert "indicators" in result["data"]
+        data = result["data"]
+
+        # 驗證核心結構
+        assert "symbol" in data
+        assert data["symbol"] == "2330"
+        assert "overall_signal" in data
+        assert data["overall_signal"] in ["strong_buy", "buy", "neutral", "sell", "strong_sell"]
+        assert "signal_score" in data
+        assert "confidence" in data
+        assert data["confidence"] in ["high", "medium", "low"]
+
+        # 驗證趨勢分析
+        assert "trend_analysis" in data
+        assert "daily_trend" in data["trend_analysis"]
+        assert "weekly_trend" in data["trend_analysis"]
+        assert "monthly_trend" in data["trend_analysis"]
+        assert "ma_alignment" in data["trend_analysis"]
+
+        # 驗證技術指標
+        assert "technical_indicators" in data
+        assert "moving_averages" in data["technical_indicators"]
+        assert "bollinger_bands" in data["technical_indicators"]
+        assert "oscillators" in data["technical_indicators"]
+        assert "macd" in data["technical_indicators"]
+
+        # 驗證成交量分析
+        assert "volume_analysis" in data
+        assert "volume_ratio" in data["volume_analysis"]
+        assert "volume_status" in data["volume_analysis"]
+
+        # 驗證支撐壓力位
+        assert "support_resistance" in data
+        assert "pivot" in data["support_resistance"]
+        assert "resistance_1" in data["support_resistance"]
+        assert "support_1" in data["support_resistance"]
+
+        # 驗證多因子評分
+        assert "multi_factor_scores" in data
+        assert "trend" in data["multi_factor_scores"]
+        assert "momentum" in data["multi_factor_scores"]
+        assert "volatility" in data["multi_factor_scores"]
+        assert "volume" in data["multi_factor_scores"]
+
+        # 驗證進出場策略
+        assert "entry_exit_strategy" in data
+        assert "action" in data["entry_exit_strategy"]
+
+        # 驗證風險指標
+        assert "risk_metrics" in data
+        assert "risk_level" in data["risk_metrics"]
+
+        # 驗證K線型態
+        assert "pattern_recognition" in data
+
+        # 驗證分析理由
+        assert "reasons" in data
+        assert isinstance(data["reasons"], list)
+
         assert "交易訊號分析成功" in result["message"]
 
     @patch("fubon_api_mcp_server.market_data_service.validate_and_get_account")
@@ -570,30 +627,177 @@ class TestMarketDataServiceMock:
         assert "無法獲取台股指數行情" in result["message"]
 
     def test_get_market_overview_success(self, market_data_service):
-        """測試市場概況成功返回"""
-        # 準備 index 資料
+        """測試市場概況成功返回（量化交易增強版）"""
+        # 準備 index 資料 - 包含完整的開高低收價格
         tse_data = {
-            "data": {"symbol": "IX0001", "name": "台股指數", "close": 18000, "chg": 50, "tradeVolume": 100000},
-            "date": "20241113",
+            "symbol": "IX0001",
+            "name": "發行量加權股價指數",
+            "price": 18500,
+            "open": 18400,
+            "high": 18550,
+            "low": 18350,
+            "previousClose": 18420,
+            "change": 80,
+            "changePercent": 0.43,
+            "tradeVolume": 5000000000,
+            "tradeValue": 180000000000,
+            "lastUpdated": "2024-11-13T13:30:00",
         }
-        market_data_service.reststock.intraday.quote.return_value = SimpleNamespace(data=tse_data["data"])
+        market_data_service.reststock.intraday.quote.return_value = SimpleNamespace(data=tse_data)
 
-        # movers and actives
-        class Movers:
-            def __init__(self):
-                self.data = [{}, {}, {}]
+        # 上漲股票 - 含漲跌幅數據
+        up_stocks = [
+            {"symbol": "2330", "name": "台積電", "changePercent": 2.5, "tradeVolume": 50000},
+            {"symbol": "2317", "name": "鴻海", "changePercent": 1.8, "tradeVolume": 30000},
+            {"symbol": "2454", "name": "聯發科", "changePercent": 10.0, "tradeVolume": 20000},  # 漲停
+        ]
+        # 下跌股票
+        down_stocks = [
+            {"symbol": "2603", "name": "長榮", "changePercent": -1.5, "tradeVolume": 40000},
+        ]
 
         market_data_service.reststock.snapshot.movers.side_effect = [
-            SimpleNamespace(data=[{}, {}]),
-            SimpleNamespace(data=[{}]),
+            SimpleNamespace(data=up_stocks),  # 上漲
+            SimpleNamespace(data=down_stocks),  # 下跌
         ]
-        market_data_service.reststock.snapshot.actives.return_value = SimpleNamespace(
-            data=[{"tradeVolume": 1000}, {"tradeVolume": 2000}]
-        )
+
+        # 成交量排行
+        volume_actives = [
+            {"symbol": "2330", "tradeVolume": 50000000, "tradeValue": 30000000000},
+            {"symbol": "2317", "tradeVolume": 30000000, "tradeValue": 5000000000},
+        ]
+        # 成交值排行
+        value_actives = [
+            {"symbol": "2330", "tradeVolume": 50000000, "tradeValue": 30000000000},
+            {"symbol": "2454", "tradeVolume": 20000000, "tradeValue": 20000000000},
+        ]
+
+        market_data_service.reststock.snapshot.actives.side_effect = [
+            SimpleNamespace(data=volume_actives),  # volume
+            SimpleNamespace(data=value_actives),   # value
+        ]
 
         result = market_data_service.get_market_overview()
         assert result["status"] == "success"
-        assert "index" in result["data"] and "statistics" in result["data"]
+        data = result["data"]
+
+        # 驗證基本結構
+        assert "index" in data
+        assert "statistics" in data
+        assert "breadth" in data
+        assert "volume_analysis" in data
+        assert "trend" in data
+        assert "sentiment" in data
+        assert "signals" in data
+
+        # 驗證指數數據
+        assert data["index"]["price"] == 18500
+        assert data["index"]["open"] == 18400
+        assert data["index"]["high"] == 18550
+        assert data["index"]["low"] == 18350
+        assert data["index"]["change"] == 80
+        assert data["index"]["change_percent"] == 0.43
+
+        # 驗證統計數據
+        assert data["statistics"]["up_count"] == 3
+        assert data["statistics"]["down_count"] == 1
+        assert data["statistics"]["limit_up_count"] == 1  # 聯發科漲停
+        assert data["statistics"]["market_status"] == "open"
+
+        # 驗證市場廣度指標
+        assert "advance_decline_ratio" in data["breadth"]
+        assert "advance_decline_line" in data["breadth"]
+        assert "market_breadth" in data["breadth"]
+        assert data["breadth"]["advance_decline_line"] == 2  # 3 up - 1 down
+
+        # 驗證趨勢指標
+        assert "intraday_trend" in data["trend"]
+        assert "trend_strength" in data["trend"]
+        assert data["trend"]["intraday_trend"] in ["上漲", "強勢上漲"]  # price > open
+
+        # 驗證情緒指標
+        assert "fear_greed_index" in data["sentiment"]
+        assert "sentiment_level" in data["sentiment"]
+        assert "bull_bear_ratio" in data["sentiment"]
+
+        # 驗證交易訊號
+        assert "action" in data["signals"]
+        assert "score" in data["signals"]
+        assert "confidence" in data["signals"]
+        assert "reasoning" in data["signals"]
+        assert isinstance(data["signals"]["reasoning"], list)
+
+    def test_get_market_overview_closed_market(self, market_data_service):
+        """測試收盤後市場狀態"""
+        # 收盤後數據 - 無漲跌家數
+        tse_data = {
+            "symbol": "IX0001",
+            "name": "發行量加權股價指數",
+            "price": 18500,
+            "open": 18400,
+            "high": 18550,
+            "low": 18350,
+            "change": 80,
+            "changePercent": 0.43,
+            "tradeVolume": 5000000000,
+        }
+        market_data_service.reststock.intraday.quote.return_value = SimpleNamespace(data=tse_data)
+
+        # 無漲跌家數 (收盤)
+        market_data_service.reststock.snapshot.movers.side_effect = [
+            SimpleNamespace(data=[]),  # 上漲
+            SimpleNamespace(data=[]),  # 下跌
+        ]
+        market_data_service.reststock.snapshot.actives.side_effect = [
+            SimpleNamespace(data=[]),
+            SimpleNamespace(data=[]),
+        ]
+
+        result = market_data_service.get_market_overview()
+        assert result["status"] == "success"
+        data = result["data"]
+        # 有價格但無漲跌家數，可能是盤後狀態
+        assert data["statistics"]["market_status"] in ["closed", "after_hours", "pre_market"]
+
+    def test_get_market_overview_bearish_market(self, market_data_service):
+        """測試空頭市場情境"""
+        tse_data = {
+            "symbol": "IX0001",
+            "name": "發行量加權股價指數",
+            "price": 17800,
+            "open": 18200,
+            "high": 18250,
+            "low": 17750,
+            "change": -400,
+            "changePercent": -2.2,
+            "tradeVolume": 8000000000,
+        }
+        market_data_service.reststock.intraday.quote.return_value = SimpleNamespace(data=tse_data)
+
+        # 大量下跌股票
+        up_stocks = [{"symbol": "2330", "changePercent": 0.5}]
+        down_stocks = [
+            {"symbol": f"00{i}", "changePercent": -2.0 - i * 0.5} for i in range(10)
+        ]
+
+        market_data_service.reststock.snapshot.movers.side_effect = [
+            SimpleNamespace(data=up_stocks),
+            SimpleNamespace(data=down_stocks),
+        ]
+        market_data_service.reststock.snapshot.actives.side_effect = [
+            SimpleNamespace(data=[{"tradeVolume": 100000}]),
+            SimpleNamespace(data=[{"tradeValue": 50000000000}]),
+        ]
+
+        result = market_data_service.get_market_overview()
+        assert result["status"] == "success"
+        data = result["data"]
+
+        # 驗證空頭市場指標
+        assert data["index"]["change"] < 0
+        assert data["trend"]["intraday_trend"] in ["下跌", "強勢下跌"]
+        assert data["sentiment"]["fear_greed_index"] < 50  # 恐懼區間
+        assert data["signals"]["score"] < 0  # 偏空訊號
 
     def test_normalize_various_types(self, market_data_service):
         """測試 _normalize_result 的各種支援型別"""

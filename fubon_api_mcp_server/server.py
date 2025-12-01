@@ -83,7 +83,6 @@ from .enums import (
 # 服務類導入
 from .market_data_service import MarketDataService
 from .reports_service import ReportsService
-from .streaming_service import StreamingService
 from .trading_service import TradingService
 
 # 加載環境變數配置
@@ -402,31 +401,6 @@ def get_historical_data(symbol):
             "status": "error",
             "data": [],
             "message": f"獲取數據時發生錯誤: {str(e)}",
-        }
-
-
-@mcp.resource("market://tse/overview")
-def get_market_overview():
-    """提供台灣股市整體概況"""
-    try:
-        # 嘗試從快取獲取
-        cached_data = server_state.get_cached_resource("market_overview")
-        if cached_data:
-            return cached_data
-
-        # 使用 market data service 獲取市場概況
-        result = market_data_service.get_market_overview()
-        if result["status"] != "success":
-            return result
-
-        # 快取結果
-        server_state.set_cached_resource("market_overview", result)
-        return result
-    except Exception as e:
-        return {
-            "status": "error",
-            "data": None,
-            "message": f"獲取市場概況時發生錯誤: {str(e)}",
         }
 
 
@@ -2355,7 +2329,7 @@ def main():
         config.restfutopt = server_state.restfutopt
 
         # 初始化服務實例
-        global market_data_service, trading_service, account_service, reports_service, indicators_service, streaming_service
+        global market_data_service, trading_service, account_service, reports_service, indicators_service
         market_data_service = MarketDataService(mcp, BASE_DATA_DIR, config.reststock, config.restfutopt, config.sdk)
         trading_service = TradingService(
             mcp,
@@ -2370,7 +2344,6 @@ def main():
         indicators_service = AnalysisService(
             mcp, config.sdk, config.accounts, config.reststock, config.restfutopt
         )
-        streaming_service = StreamingService(mcp, server_state)
 
         logger.info("富邦證券MCP server運行中...")
         mcp.run()
