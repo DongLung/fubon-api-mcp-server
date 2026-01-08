@@ -1,0 +1,569 @@
+{
+  "version": "1.0.0",
+  "name": "Fubon API MCP Server Skills",
+  "description": "Claude Skills configuration for Fubon API MCP Server integration",
+  "lastUpdated": "2026-01-08T15:51:11Z",
+  "mcp": {
+    "enabled": true,
+    "version": "0.1.0"
+  },
+  "tools": [
+    {
+      "id": "fubon-account-info",
+      "name": "Get Account Information",
+      "category": "accounts",
+      "description": "Retrieve detailed account information including balances, account type, and status",
+      "enabled": true,
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "required": true,
+          "description": "The Fubon account identifier"
+        },
+        "includeDetails": {
+          "type": "boolean",
+          "required": false,
+          "description": "Include detailed account information",
+          "default": true
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Account information object containing balance, type, and status"
+      },
+      "rateLimit": {
+        "requests": 100,
+        "period": "minute"
+      }
+    },
+    {
+      "id": "fubon-portfolio",
+      "name": "Get Portfolio Holdings",
+      "category": "portfolio",
+      "description": "Retrieve current portfolio holdings including stocks, bonds, and funds",
+      "enabled": true,
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "required": true,
+          "description": "The Fubon account identifier"
+        },
+        "assetType": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by asset type (stocks, bonds, funds, all)",
+          "enum": ["stocks", "bonds", "funds", "all"],
+          "default": "all"
+        },
+        "currency": {
+          "type": "string",
+          "required": false,
+          "description": "Currency code (USD, TWD, EUR, etc.)",
+          "default": "TWD"
+        }
+      },
+      "returns": {
+        "type": "array",
+        "description": "Array of holding objects with position details"
+      },
+      "rateLimit": {
+        "requests": 50,
+        "period": "minute"
+      }
+    },
+    {
+      "id": "fubon-market-data",
+      "name": "Get Market Data",
+      "category": "market",
+      "description": "Retrieve real-time or historical market data for securities",
+      "enabled": true,
+      "parameters": {
+        "symbol": {
+          "type": "string",
+          "required": true,
+          "description": "Security symbol or ticker code"
+        },
+        "dataType": {
+          "type": "string",
+          "required": false,
+          "description": "Type of market data (realtime, historical, quote)",
+          "enum": ["realtime", "historical", "quote"],
+          "default": "realtime"
+        },
+        "period": {
+          "type": "string",
+          "required": false,
+          "description": "Historical period (1d, 1w, 1m, 3m, 1y, 5y)",
+          "enum": ["1d", "1w", "1m", "3m", "1y", "5y"],
+          "default": "1d"
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Market data object with price, volume, and technical indicators"
+      },
+      "rateLimit": {
+        "requests": 200,
+        "period": "minute"
+      }
+    },
+    {
+      "id": "fubon-place-order",
+      "name": "Place Trading Order",
+      "category": "trading",
+      "description": "Place a new buy or sell order for securities",
+      "enabled": true,
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "required": true,
+          "description": "The Fubon account identifier"
+        },
+        "symbol": {
+          "type": "string",
+          "required": true,
+          "description": "Security symbol to trade"
+        },
+        "orderType": {
+          "type": "string",
+          "required": true,
+          "description": "Type of order",
+          "enum": ["buy", "sell"]
+        },
+        "quantity": {
+          "type": "number",
+          "required": true,
+          "description": "Number of shares to trade"
+        },
+        "price": {
+          "type": "number",
+          "required": false,
+          "description": "Limit price for the order (market price if not specified)"
+        },
+        "orderClass": {
+          "type": "string",
+          "required": false,
+          "description": "Order class type",
+          "enum": ["market", "limit", "stop-loss"],
+          "default": "market"
+        },
+        "timeInForce": {
+          "type": "string",
+          "required": false,
+          "description": "Time in force for the order",
+          "enum": ["day", "gtc", "ioc"],
+          "default": "day"
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Order confirmation object with order ID and details"
+      },
+      "rateLimit": {
+        "requests": 20,
+        "period": "minute"
+      },
+      "requiresApproval": true
+    },
+    {
+      "id": "fubon-order-history",
+      "name": "Get Order History",
+      "category": "trading",
+      "description": "Retrieve order history and status for an account",
+      "enabled": true,
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "required": true,
+          "description": "The Fubon account identifier"
+        },
+        "status": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by order status",
+          "enum": ["pending", "filled", "cancelled", "all"],
+          "default": "all"
+        },
+        "startDate": {
+          "type": "string",
+          "required": false,
+          "description": "Start date in YYYY-MM-DD format"
+        },
+        "endDate": {
+          "type": "string",
+          "required": false,
+          "description": "End date in YYYY-MM-DD format"
+        },
+        "limit": {
+          "type": "number",
+          "required": false,
+          "description": "Maximum number of orders to return",
+          "default": 50
+        }
+      },
+      "returns": {
+        "type": "array",
+        "description": "Array of order objects with status and details"
+      },
+      "rateLimit": {
+        "requests": 75,
+        "period": "minute"
+      }
+    },
+    {
+      "id": "fubon-transactions",
+      "name": "Get Transaction History",
+      "category": "accounts",
+      "description": "Retrieve transaction history for an account",
+      "enabled": true,
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "required": true,
+          "description": "The Fubon account identifier"
+        },
+        "transactionType": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by transaction type",
+          "enum": ["deposit", "withdrawal", "dividend", "fee", "all"],
+          "default": "all"
+        },
+        "startDate": {
+          "type": "string",
+          "required": false,
+          "description": "Start date in YYYY-MM-DD format"
+        },
+        "endDate": {
+          "type": "string",
+          "required": false,
+          "description": "End date in YYYY-MM-DD format"
+        }
+      },
+      "returns": {
+        "type": "array",
+        "description": "Array of transaction objects"
+      },
+      "rateLimit": {
+        "requests": 100,
+        "period": "minute"
+      }
+    },
+    {
+      "id": "fubon-watchlist",
+      "name": "Manage Watchlist",
+      "category": "portfolio",
+      "description": "Create, retrieve, and manage watchlists of securities",
+      "enabled": true,
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "required": true,
+          "description": "The Fubon account identifier"
+        },
+        "action": {
+          "type": "string",
+          "required": true,
+          "description": "Watchlist action to perform",
+          "enum": ["create", "get", "add", "remove", "list"]
+        },
+        "watchlistId": {
+          "type": "string",
+          "required": false,
+          "description": "Watchlist identifier (required for get, add, remove)"
+        },
+        "symbol": {
+          "type": "string",
+          "required": false,
+          "description": "Security symbol (required for add/remove)"
+        },
+        "name": {
+          "type": "string",
+          "required": false,
+          "description": "Watchlist name (required for create)"
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Watchlist object or array of watchlists"
+      },
+      "rateLimit": {
+        "requests": 150,
+        "period": "minute"
+      }
+    },
+    {
+      "id": "fubon-alerts",
+      "name": "Manage Price Alerts",
+      "category": "portfolio",
+      "description": "Create and manage price alert notifications",
+      "enabled": true,
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "required": true,
+          "description": "The Fubon account identifier"
+        },
+        "action": {
+          "type": "string",
+          "required": true,
+          "description": "Alert action",
+          "enum": ["create", "list", "delete"]
+        },
+        "symbol": {
+          "type": "string",
+          "required": false,
+          "description": "Security symbol for the alert"
+        },
+        "alertType": {
+          "type": "string",
+          "required": false,
+          "description": "Type of alert",
+          "enum": ["price_above", "price_below", "percent_change"],
+          "default": "price_above"
+        },
+        "threshold": {
+          "type": "number",
+          "required": false,
+          "description": "Threshold value for the alert"
+        },
+        "alertId": {
+          "type": "string",
+          "required": false,
+          "description": "Alert identifier (required for delete)"
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Alert object or array of alerts"
+      },
+      "rateLimit": {
+        "requests": 100,
+        "period": "minute"
+      }
+    },
+    {
+      "id": "fubon-research",
+      "name": "Get Research Data",
+      "category": "market",
+      "description": "Retrieve investment research, analyst reports, and recommendations",
+      "enabled": true,
+      "parameters": {
+        "symbol": {
+          "type": "string",
+          "required": false,
+          "description": "Security symbol for specific research"
+        },
+        "researchType": {
+          "type": "string",
+          "required": false,
+          "description": "Type of research",
+          "enum": ["analyst_reports", "earnings", "fundamentals", "sentiment"],
+          "default": "analyst_reports"
+        },
+        "limit": {
+          "type": "number",
+          "required": false,
+          "description": "Maximum number of items to return",
+          "default": 10
+        }
+      },
+      "returns": {
+        "type": "array",
+        "description": "Array of research documents or data"
+      },
+      "rateLimit": {
+        "requests": 50,
+        "period": "minute"
+      }
+    },
+    {
+      "id": "fubon-analytics",
+      "name": "Get Portfolio Analytics",
+      "category": "portfolio",
+      "description": "Retrieve portfolio performance analytics and risk metrics",
+      "enabled": true,
+      "parameters": {
+        "accountId": {
+          "type": "string",
+          "required": true,
+          "description": "The Fubon account identifier"
+        },
+        "analyticsType": {
+          "type": "string",
+          "required": false,
+          "description": "Type of analytics",
+          "enum": ["performance", "risk", "allocation", "comparison"],
+          "default": "performance"
+        },
+        "period": {
+          "type": "string",
+          "required": false,
+          "description": "Time period for analysis",
+          "enum": ["1d", "1w", "1m", "3m", "6m", "1y", "ytd"],
+          "default": "1y"
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Analytics object with performance metrics and risk data"
+      },
+      "rateLimit": {
+        "requests": 75,
+        "period": "minute"
+      }
+    }
+  ],
+  "authentication": {
+    "type": "oauth2",
+    "providers": [
+      {
+        "name": "Fubon",
+        "authEndpoint": "/api/v1/auth/oauth/authorize",
+        "tokenEndpoint": "/api/v1/auth/oauth/token",
+        "refreshEndpoint": "/api/v1/auth/oauth/refresh",
+        "scopes": [
+          "accounts:read",
+          "accounts:write",
+          "portfolio:read",
+          "portfolio:write",
+          "trading:read",
+          "trading:write",
+          "market:read",
+          "alerts:read",
+          "alerts:write"
+        ]
+      }
+    ]
+  },
+  "endpoints": {
+    "baseUrl": "https://api.fubon.com/api/v1",
+    "marketDataUrl": "https://market.fubon.com/api/v1",
+    "endpoints": [
+      {
+        "path": "/accounts",
+        "methods": ["GET"],
+        "description": "List all accounts",
+        "authentication": true
+      },
+      {
+        "path": "/accounts/{accountId}",
+        "methods": ["GET"],
+        "description": "Get account details",
+        "authentication": true
+      },
+      {
+        "path": "/accounts/{accountId}/portfolio",
+        "methods": ["GET"],
+        "description": "Get portfolio holdings",
+        "authentication": true
+      },
+      {
+        "path": "/accounts/{accountId}/orders",
+        "methods": ["GET", "POST"],
+        "description": "Get orders or place new order",
+        "authentication": true
+      },
+      {
+        "path": "/accounts/{accountId}/orders/{orderId}",
+        "methods": ["GET", "DELETE"],
+        "description": "Get order details or cancel order",
+        "authentication": true
+      },
+      {
+        "path": "/accounts/{accountId}/transactions",
+        "methods": ["GET"],
+        "description": "Get transaction history",
+        "authentication": true
+      },
+      {
+        "path": "/accounts/{accountId}/watchlists",
+        "methods": ["GET", "POST"],
+        "description": "Manage watchlists",
+        "authentication": true
+      },
+      {
+        "path": "/market/quote/{symbol}",
+        "methods": ["GET"],
+        "description": "Get market quote for symbol",
+        "authentication": false
+      },
+      {
+        "path": "/market/candles/{symbol}",
+        "methods": ["GET"],
+        "description": "Get candlestick data",
+        "authentication": false
+      },
+      {
+        "path": "/market/research",
+        "methods": ["GET"],
+        "description": "Get research and analyst reports",
+        "authentication": false
+      }
+    ]
+  },
+  "errorHandling": {
+    "defaultTimeout": 30000,
+    "retryPolicy": {
+      "enabled": true,
+      "maxAttempts": 3,
+      "backoffMultiplier": 2,
+      "initialDelayMs": 1000
+    },
+    "errorCodes": [
+      {
+        "code": 400,
+        "description": "Bad Request",
+        "action": "check_parameters"
+      },
+      {
+        "code": 401,
+        "description": "Unauthorized",
+        "action": "reauthenticate"
+      },
+      {
+        "code": 403,
+        "description": "Forbidden",
+        "action": "check_permissions"
+      },
+      {
+        "code": 404,
+        "description": "Not Found",
+        "action": "verify_resource_exists"
+      },
+      {
+        "code": 429,
+        "description": "Rate Limited",
+        "action": "backoff_and_retry"
+      },
+      {
+        "code": 500,
+        "description": "Server Error",
+        "action": "retry_with_backoff"
+      }
+    ]
+  },
+  "capabilities": {
+    "trading": true,
+    "realTimeData": true,
+    "historicalData": true,
+    "portfolioAnalytics": true,
+    "researchData": true,
+    "priceAlerts": true,
+    "multiCurrency": true,
+    "advancedOrders": true
+  },
+  "limitations": {
+    "maxSymbolsPerRequest": 100,
+    "maxPortfolioSize": 1000,
+    "minOrderSize": 1,
+    "maxOrderSize": 1000000,
+    "historicalDataLimit": 10,
+    "years": "Maximum 10 years of historical data"
+  },
+  "documentation": {
+    "apiDocUrl": "https://api.fubon.com/docs",
+    "webhookDocUrl": "https://api.fubon.com/docs/webhooks",
+    "tutorialUrl": "https://api.fubon.com/docs/getting-started"
+  }
+}
